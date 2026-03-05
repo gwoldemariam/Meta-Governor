@@ -1,0 +1,25 @@
+{
+  "name": "meta-governor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@pnp/common": "^2.15.0",
+    "@pnp/nodejs": "^4.18.0",
+    "@pnp/queryable": "^4.18.0",
+    "@pnp/sp": "^4.18.0",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
