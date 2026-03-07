@@ -4,6 +4,7 @@ jspm_packages/
 
 # Build output
 dist/
+*.log
 
 # Credentials and Secrets
 .env
@@ -16,3 +17,7 @@ certs/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local Verification Scripts
+test-*.ts
+tests/

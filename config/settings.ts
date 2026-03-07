@@ -10,6 +10,8 @@ export const Settings = {
     clientId: process.env.CLIENT_ID || "",
     thumbprint: process.env.CERT_THUMBPRINT || "",
     siteUrl: process.env.SITE_URL || "",
+    privateKeyPath: "./certs/private.key",
+    appName: "MetaGovernor-Dev", // For User-Agent headers
 
     /**
      * Reads the private key file from the path specified in .env
