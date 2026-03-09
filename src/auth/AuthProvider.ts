@@ -29,12 +29,12 @@ export class AuthProvider {
      * Obtains an Access Token for SharePoint
      */
     public async getAccessToken(): Promise<string> {
-        console.log("🔑 Auth: Starting token acquisition...");
+        //console.log("🔑 Auth: Starting token acquisition...");
         try {
             // SharePoint expects the root of the tenant for the scope
             const siteOrigin = new URL(Settings.siteUrl).origin;
             const scope = `${siteOrigin}/.default`;
-            console.log(`🔑 Auth: Requesting scope: ${scope}`);
+            //console.log(`🔑 Auth: Requesting scope: ${scope}`);
 
             const result = await this.msalClient.acquireTokenByClientCredential({
                 scopes: [scope],
@@ -45,7 +45,7 @@ export class AuthProvider {
                 throw new Error("Failed to acquire access token.");
             }
 
-            console.log("🔑 Auth: Token acquisition complete.");
+            //console.log("🔑 Auth: Token acquisition complete.");
             return result!.accessToken;
         } catch (error) {
             console.error("🔑 Auth: FAILED during MSAL call.");
