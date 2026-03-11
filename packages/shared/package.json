@@ -1,0 +1,6 @@
+{
+  "name": "@meta-governor/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./types.ts"
+}

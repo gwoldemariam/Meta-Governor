@@ -1,23 +1,31 @@
 # Dependency directories
 node_modules/
 jspm_packages/
+**/node_modules/
 
 # Build output
 dist/
-*.log
+**/dist/
 
 # Credentials and Secrets
-.env
-certs/
-*.pfx
-*.key
-*.cer
+**/.env
+**/certs/
+**/*.pfx
+**/*.key
+**/*.cer
 
 # IDE and OS files
 .vscode/
 .DS_Store
 Thumbs.db
 
-# Local Verification Scripts
+# Local Test Scripts
 test-*.ts
 tests/
+
+# Local Reports
+**/reports/
+
+# OS
+Thumbs.db
+*.log

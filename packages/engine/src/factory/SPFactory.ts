@@ -3,22 +3,18 @@ import { Settings } from "../../config/settings";
 
 export class SPFactory {
 
-    /**
-     * Helper to specifically get Web (Site) information
-     */
     public static async getWeb(authProvider: AuthProvider): Promise<any> {
         return this.request(authProvider, "/_api/web");
     }
-    
-    /**
-     * Standardized request method for any SharePoint API call.
-     */
+
     public static async request(authProvider: AuthProvider, apiPath: string): Promise<any> {
         const token = await authProvider.getAccessToken();
-        
-        // Clean the URL to prevent double slashes //
+
+        // If apiPath is already a full URL (e.g. odata.nextLink), use it directly
+        // Otherwise prepend the configured siteUrl
+        const isAbsolute = apiPath.startsWith("https://") || apiPath.startsWith("http://");
         const baseUrl = Settings.siteUrl.replace(/\/$/, "");
-        const targetUrl = `${baseUrl}${apiPath}`;
+        const targetUrl = isAbsolute ? apiPath : `${baseUrl}${apiPath}`;
 
         const response = await fetch(targetUrl, {
             headers: {

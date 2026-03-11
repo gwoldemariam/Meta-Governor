@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --color-cyan:       #00bfa8;
+  --color-cyan-l:     #00e5d0;
+  --color-cyan-text:  #007a6e;
+  --color-pink:       #e8005a;
+  --color-pink-l:     #ff4d8d;
+  --color-green:      #00a67a;
+  --color-green-l:    #00e5a0;
+  --color-amber:      #c48a00;
+  --color-amber-l:    #ffcc44;
+  --color-blue:       #2563eb;
+  --color-blue-l:     #4d9fff;
+}
+
+/* Light theme tokens */
+:root {
+  --bg:         #f0f4ff;
+  --card:       #ffffff;
+  --card2:      #f4f7ff;
+  --border:     rgba(180,200,255,0.45);
+  --border2:    rgba(100,140,255,0.30);
+  --border3:    rgba(100,140,255,0.14);
+  --text:       #0f1733;
+  --text2:      #4a5a8a;
+  --text3:      #8a9bc4;
+  --cyan-text:  #007a6e;
+  --pink:       #e8005a;
+  --pink-l:     #ff4d8d;
+  --green:      #00a67a;
+  --green-l:    #00e5a0;
+  --amber:      #c48a00;
+  --amber-l:    #ffcc44;
+  --blue:       #2563eb;
+  --blue-l:     #4d9fff;
+}
+
+/* Dark theme tokens */
+.dark {
+  --bg:         #0e1525;
+  --card:       #131e33;
+  --card2:      #182035;
+  --border:     rgba(100,160,255,0.12);
+  --border2:    rgba(100,160,255,0.22);
+  --border3:    rgba(100,160,255,0.08);
+  --text:       #dce8ff;
+  --text2:      #7a93c4;
+  --text3:      #3d5278;
+  --cyan-text:  #00e5d0;
+  --pink:       #ff4d8d;
+  --pink-l:     #ff4d8d;
+  --green:      #00e5a0;
+  --green-l:    #00e5a0;
+  --amber:      #ffcc44;
+  --amber-l:    #ffcc44;
+  --blue:       #4d9fff;
+  --blue-l:     #4d9fff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,191,168,0.3); border-radius: 4px; }
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}

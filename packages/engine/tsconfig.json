@@ -11,8 +11,20 @@
     "sourceMap": true,
     "strict": false,
     "resolveJsonModule": true,
-    "lib": ["ESNext", "DOM"]
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "paths": {
+      "@meta-governor/shared": [
+        "../shared/types.ts"
+      ]
+    }
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules", "dist"
+  ]
 }

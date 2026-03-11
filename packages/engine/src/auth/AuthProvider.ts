@@ -17,7 +17,7 @@ export class AuthProvider {
                 authority: `https://login.microsoftonline.com/${Settings.tenantId}/v2.0`,
                 clientCertificate: {
                     thumbprint: Settings.thumbprint,
-                    privateKey: privateKey,
+                    privateKey: Settings.getPrivateKey()
                 },
             },
         };

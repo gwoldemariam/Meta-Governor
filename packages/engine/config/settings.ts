@@ -3,14 +3,14 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 // Load environment variables from the .env file
-dotenv.config();
+dotenv.config({ path: join(__dirname, "../.env") });
 
 export const Settings = {
     tenantId: process.env.TENANT_ID || "",
     clientId: process.env.CLIENT_ID || "",
     thumbprint: process.env.CERT_THUMBPRINT || "",
     siteUrl: process.env.SITE_URL || "",
-    privateKeyPath: "./certs/private.key",
+    privateKeyPath: join(__dirname, "../certs/private.key"),
     appName: "MetaGovernor-Dev", // For User-Agent headers
 
     /**
@@ -19,10 +19,13 @@ export const Settings = {
      */
     getPrivateKey(): string {
         try {
-            const certPath = join(process.cwd(), process.env.CERT_PATH || "");
-            return readFileSync(certPath, "utf8");
+            return readFileSync(this.privateKeyPath, "utf8");
         } catch (err) {
-            throw new Error(`Critical Error: Could not read private key file. Check CERT_PATH in your .env file. Error: ${err}`);
+            throw new Error(
+                `Critical Error: Could not read private key at: ${this.privateKeyPath}\n` +
+                `Make sure certs/private.key exists inside packages/engine/certs/\n` +
+                `Error: ${err}`
+            );
         }
     },
 
