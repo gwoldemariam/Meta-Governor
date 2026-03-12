@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import Sidebar from './components/layout/Sidebar'
 import Topbar from './components/layout/Topbar'
 import ManifestLoader from './components/ManifestLoader'
@@ -10,11 +10,20 @@ import { useGovernanceStore } from './store/useGovernanceStore'
 import FixPanel from './components/FixPanel'
 
 export default function App() {
-  const loadStatus = useGovernanceStore(s => s.loadStatus)
-  const showLoader = loadStatus === 'idle' || loadStatus === 'loading' || loadStatus === 'error'
-
   return (
     <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
+  )
+}
+
+function AppShell() {
+  const loadStatus = useGovernanceStore(s => s.loadStatus)
+  const showLoader = loadStatus === 'idle' || loadStatus === 'loading' || loadStatus === 'error'
+  const location = useLocation()
+
+  return (
+    <>
       {/* Ambient background — always visible */}
       <div style={{
         position: 'fixed',
@@ -41,7 +50,6 @@ export default function App() {
         backgroundSize: '48px 48px'
       }} />
 
-      {/* Loader — full screen, no shell */}
       {showLoader ? (
         <div style={{
           minHeight: '100vh',
@@ -52,7 +60,6 @@ export default function App() {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          {/* Minimal topbar — theme toggle only */}
           <div style={{
             display: 'flex',
             justifyContent: 'flex-end',
@@ -64,7 +71,6 @@ export default function App() {
           <ManifestLoader />
         </div>
       ) : (
-        /* Full app shell — only after manifest loaded */
         <div style={{
           display: 'flex',
           minHeight: '100vh',
@@ -87,22 +93,23 @@ export default function App() {
               padding: '24px 28px',
               overflow: 'auto'
             }}>
-              <Routes>
-                <Route path="/" element={<HealthDashboard />} />
-                <Route path="/libraries" element={<LibraryExplorer />} />
-                <Route path="/queue" element={<RemediationQueue />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
+              <div key={location.pathname} className="page-enter">
+                <Routes>
+                  <Route path="/" element={<HealthDashboard />} />
+                  <Route path="/libraries" element={<LibraryExplorer />} />
+                  <Route path="/queue" element={<RemediationQueue />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </div>
             </main>
           </div>
           <FixPanel />
         </div>
       )}
-    </BrowserRouter>
+    </>
   )
 }
 
-// Extracted so it can be used in the minimal topbar above
 function ThemeToggle() {
   const { theme, toggleTheme } = useGovernanceStore()
   return (

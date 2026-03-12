@@ -53,6 +53,16 @@ export default function Topbar() {
                         : 'No manifest loaded'
                     }
                 </div>
+                {manifest && (
+                    <div style={{
+                        fontFamily: 'DM Mono, monospace',
+                        fontSize: '10px',
+                        color: 'var(--text3)',
+                        marginTop: '2px',
+                    }}>
+                        audited {new Date(manifest.generatedAt).toLocaleString()}
+                    </div>
+                )}
             </div>
 
             {/* Right — controls */}

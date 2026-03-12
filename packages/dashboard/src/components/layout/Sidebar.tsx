@@ -25,6 +25,14 @@ const navSections = [
 
 export default function Sidebar() {
     const manifest = useGovernanceStore(s => s.manifest)
+    const failCount = manifest?.summary.failCount ?? 0
+
+    const governedLibraries = manifest?.libraries.filter(l =>
+        l.schemaStatus === 'governed' || l.schemaStatus === 'violations'
+    ) ?? []
+    const governedPass = governedLibraries.reduce((sum, l) => sum + l.passCount, 0)
+    const governedTotal = governedLibraries.reduce((sum, l) => sum + l.itemCount, 0)
+    const governedRate = governedTotal > 0 ? Math.round((governedPass / governedTotal) * 100) : 0
 
     return (
         <aside style={{
@@ -163,6 +171,21 @@ export default function Sidebar() {
                                     }}>
                                         {item.label}
                                     </span>
+                                    {item.path === '/queue' && failCount > 0 && (
+                                        <span style={{
+                                            fontFamily: 'DM Mono, monospace',
+                                            fontSize: '10px',
+                                            fontWeight: 700,
+                                            padding: '2px 7px',
+                                            borderRadius: '6px',
+                                            background: 'rgba(232,0,90,0.12)',
+                                            border: '1px solid rgba(232,0,90,0.28)',
+                                            color: 'var(--pink)',
+                                            flexShrink: 0,
+                                        }}>
+                                            {failCount}
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </NavLink>
@@ -201,7 +224,7 @@ export default function Sidebar() {
                         {[
                             { val: manifest.summary.totalLibraries, lbl: 'Libraries' },
                             { val: manifest.summary.totalItems, lbl: 'Files' },
-                            { val: `${manifest.summary.complianceRate}%`, lbl: 'Health' },
+                            { val: `${governedRate}%`, lbl: 'Health' },
                         ].map(s => (
                             <div key={s.lbl} style={{ textAlign: 'center', flex: 1 }}>
                                 <div style={{

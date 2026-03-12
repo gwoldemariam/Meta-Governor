@@ -28,6 +28,38 @@ function complianceAccent(rate: number): 'cyan' | 'pink' | 'green' | 'amber' {
     return 'pink'
 }
 
+function NoManifest() {
+    return (
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '14px',
+            padding: '80px 20px',
+            textAlign: 'center',
+        }}>
+            <div style={{ fontSize: '36px', opacity: 0.4 }}>◈</div>
+            <div style={{
+                fontSize: '16px',
+                fontWeight: 700,
+                color: 'var(--text2)',
+            }}>
+                No manifest loaded
+            </div>
+            <div style={{
+                fontFamily: 'DM Mono, monospace',
+                fontSize: '11px',
+                color: 'var(--text3)',
+                maxWidth: '280px',
+                lineHeight: 1.6,
+            }}>
+                Use the Load Manifest button in the top bar to get started.
+            </div>
+        </div>
+    )
+}
+
 // ── Metric Card (from mockup .mc pattern) ────────────────────────────────────
 
 function MetricCard({ label, value, sub, accent, icon, trend }: {
@@ -345,14 +377,28 @@ function LibBarRow({ lib }: { lib: LibraryReport }) {
 
 export default function HealthDashboard() {
     const manifest = useGovernanceStore(s => s.manifest)
-    if (!manifest) return null
+    if (!manifest) return <NoManifest />
 
     const { summary, libraries } = manifest
-    const accent = complianceAccent(summary.complianceRate)
 
     const governed = libraries.filter(l => l.schemaStatus === 'governed').length
     const violations = libraries.filter(l => l.schemaStatus === 'violations').length
     const unmanaged = libraries.filter(l => l.schemaStatus === 'no-schema').length
+
+    // Governed compliance — scoped to libraries that actually have a schema
+    const governedLibraries = libraries.filter(l =>
+        l.schemaStatus === 'governed' || l.schemaStatus === 'violations'
+    )
+    const governedPass = governedLibraries.reduce((sum, l) => sum + l.passCount, 0)
+    const governedTotal = governedLibraries.reduce((sum, l) => sum + l.itemCount, 0)
+    const governedRate = governedTotal > 0 ? Math.round((governedPass / governedTotal) * 100) : 0
+
+    // Schema coverage — how much of the tenant is even being managed
+    const coverageRate = summary.totalLibraries > 0
+        ? Math.round((summary.governedLibraries / summary.totalLibraries) * 100)
+        : 0
+
+    const accent = complianceAccent(governedRate)
 
     const accentColor =
         accent === 'green' ? 'var(--green)' :
@@ -377,11 +423,18 @@ export default function HealthDashboard() {
             {/* Metric cards */}
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 <MetricCard
-                    label="Compliance Rate"
-                    value={`${summary.complianceRate}%`}
-                    sub={`${summary.passCount} of ${summary.totalItems} items tagged`}
-                    accent={accent} icon="✓"
-                    trend={`${summary.totalItems} total`}
+                    label="Governed Compliance"
+                    value={`${governedRate}%`}
+                    sub={`${governedPass} of ${governedTotal} governed items tagged`}
+                    accent={complianceAccent(governedRate)} icon="✓"
+                    trend={`${governedTotal} in scope`}
+                />
+                <MetricCard
+                    label="Schema Coverage"
+                    value={`${coverageRate}%`}
+                    sub={`${summary.governedLibraries} of ${summary.totalLibraries} libraries governed`}
+                    accent={complianceAccent(coverageRate)} icon="◈"
+                    trend={`${unmanaged} unmanaged`}
                 />
                 <MetricCard
                     label="Failing Items"
@@ -396,12 +449,6 @@ export default function HealthDashboard() {
                     sub={`${summary.governedLibraries} with governance rules`}
                     accent="cyan" icon="◈"
                     trend={`${unmanaged} unmanaged`}
-                />
-                <MetricCard
-                    label="Governed Files"
-                    value={summary.passCount}
-                    sub="fully tagged and compliant"
-                    accent="green" icon="📁"
                 />
             </div>
 
@@ -422,7 +469,7 @@ export default function HealthDashboard() {
                                 Compliance Score
                             </div>
                             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '10px', color: 'var(--text3)', marginTop: '3px' }}>
-                                // tenant-wide · all {summary.totalLibraries} libraries
+                                // governed libraries only · {governedLibraries.length} in scope
                             </div>
                         </div>
                         <div style={{
@@ -438,10 +485,10 @@ export default function HealthDashboard() {
                     {/* Donut + legend side by side */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                         <SvgDonut
-                            rate={summary.complianceRate}
-                            passCount={summary.passCount}
-                            failCount={summary.failCount}
-                            totalItems={summary.totalItems}
+                            rate={governedRate}
+                            passCount={governedPass}
+                            failCount={governedTotal - governedPass}
+                            totalItems={governedTotal}
                         />
 
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '9px', minWidth: 0 }}>
@@ -455,10 +502,10 @@ export default function HealthDashboard() {
                                 <div style={{ flex: 1, fontSize: '12px', color: 'var(--text2)' }}>Fully Tagged</div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '15px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.5px' }}>
-                                        {summary.passCount}
+                                        {governedPass}
                                     </div>
                                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--text3)' }}>
-                                        {summary.complianceRate}%
+                                        {governedRate}%
                                     </div>
                                 </div>
                             </div>
@@ -473,10 +520,10 @@ export default function HealthDashboard() {
                                 <div style={{ flex: 1, fontSize: '12px', color: 'var(--text2)' }}>Missing Tags</div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '15px', fontWeight: 800, color: 'var(--pink)', letterSpacing: '-0.5px' }}>
-                                        {summary.failCount}
+                                        {governedTotal - governedPass}
                                     </div>
                                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: '9px', color: 'var(--text3)' }}>
-                                        {summary.totalItems > 0 ? (100 - summary.complianceRate).toFixed(1) : 0}%
+                                        {governedTotal > 0 ? (100 - governedRate).toFixed(1) : 0}%
                                     </div>
                                 </div>
                             </div>

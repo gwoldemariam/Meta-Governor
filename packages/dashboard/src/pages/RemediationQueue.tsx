@@ -43,7 +43,6 @@ function RiskBadge({ score }: { score: number }) {
 }
 
 function GapTags({ gaps }: { gaps: WorkQueueItem['gaps'] }) {
-    // Show up to 3 tags, then +N more
     const visible = gaps.slice(0, 3)
     const extra = gaps.length - visible.length
 
@@ -98,6 +97,38 @@ function GapTags({ gaps }: { gaps: WorkQueueItem['gaps'] }) {
     )
 }
 
+function NoManifest() {
+    return (
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '14px',
+            padding: '80px 20px',
+            textAlign: 'center',
+        }}>
+            <div style={{ fontSize: '36px', opacity: 0.4 }}>◈</div>
+            <div style={{
+                fontSize: '16px',
+                fontWeight: 700,
+                color: 'var(--text2)',
+            }}>
+                No manifest loaded
+            </div>
+            <div style={{
+                fontFamily: 'DM Mono, monospace',
+                fontSize: '11px',
+                color: 'var(--text3)',
+                maxWidth: '280px',
+                lineHeight: 1.6,
+            }}>
+                Use the Load Manifest button in the top bar to get started.
+            </div>
+        </div>
+    )
+}
+
 // ── Column helper ─────────────────────────────────────────────────────────────
 
 const col = createColumnHelper<WorkQueueItem>()
@@ -105,17 +136,15 @@ const col = createColumnHelper<WorkQueueItem>()
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function RemediationQueue() {
-    const { getWorkQueue, setSelectedItem } = useGovernanceStore()
-    const allItems = useMemo(() => getWorkQueue(), [getWorkQueue])
-
+    // ── ALL hooks first — no early returns before these ──────────────────────
+    const { manifest, getWorkQueue, setSelectedItem } = useGovernanceStore()
+    const allItems = useMemo(() => getWorkQueue(), [manifest])
     const [sorting, setSorting] = useState<SortingState>([{ id: 'riskScore', desc: true }])
     const [search, setSearch] = useState('')
     const [riskFilter, setRiskFilter] = useState<'all' | 'HIGH' | 'MED' | 'LOW'>('all')
 
-    // Filter data before passing to table
     const filtered = useMemo(() => {
         let data = allItems
-
         if (search.trim()) {
             const q = search.toLowerCase()
             data = data.filter(item =>
@@ -123,11 +152,9 @@ export default function RemediationQueue() {
                 item.libraryName.toLowerCase().includes(q)
             )
         }
-
         if (riskFilter !== 'all') {
             data = data.filter(item => riskLevel(item.riskScore) === riskFilter)
         }
-
         return data
     }, [allItems, search, riskFilter])
 
@@ -178,14 +205,16 @@ export default function RemediationQueue() {
                         transition: 'all 0.15s'
                     }}
                     onMouseEnter={e => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,191,168,0.16)'
-                            ; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 3px 12px rgba(0,191,168,0.2)'
-                            ; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'
+                        const b = e.currentTarget as HTMLButtonElement
+                        b.style.background = 'rgba(0,191,168,0.16)'
+                        b.style.boxShadow = '0 3px 12px rgba(0,191,168,0.2)'
+                        b.style.transform = 'translateY(-1px)'
                     }}
                     onMouseLeave={e => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,191,168,0.09)'
-                            ; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'
-                            ; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
+                        const b = e.currentTarget as HTMLButtonElement
+                        b.style.background = 'rgba(0,191,168,0.09)'
+                        b.style.boxShadow = 'none'
+                        b.style.transform = 'translateY(0)'
                     }}
                 >
                     Fix →
@@ -203,6 +232,9 @@ export default function RemediationQueue() {
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
     })
+
+    // ── Early return AFTER all hooks ─────────────────────────────────────────
+    if (!manifest) return <NoManifest />
 
     const highCount = allItems.filter(i => riskLevel(i.riskScore) === 'HIGH').length
     const medCount = allItems.filter(i => riskLevel(i.riskScore) === 'MED').length
@@ -318,7 +350,6 @@ export default function RemediationQueue() {
 
                 {/* Table */}
                 {allItems.length === 0 ? (
-                    // Empty state — no failing items
                     <div style={{
                         textAlign: 'center', padding: '60px 20px',
                         display: 'flex', flexDirection: 'column',
@@ -333,7 +364,6 @@ export default function RemediationQueue() {
                         </div>
                     </div>
                 ) : filtered.length === 0 ? (
-                    // Empty state — filters returned nothing
                     <div style={{
                         textAlign: 'center', padding: '60px 20px',
                         display: 'flex', flexDirection: 'column',
