@@ -1,141 +1,255 @@
-import { create } from 'zustand';
-import type { TenantManifest, LibraryReport, AuditedItem } from '../types';
+import { create } from 'zustand'
+import type { TenantManifest, AuditedItem, ItemGap } from '@meta-governor/shared'
 
-export interface WorkQueueItem extends AuditedItem {
-    libraryName: string;
-    libraryUrl: string;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface WorkQueueItem {
+    compositeId: string
+    itemId: number
+    fileName: string
+    itemUrl: string
+    riskScore: number
+    gaps: ItemGap[]
+    libraryName: string
+    libraryUrl: string
 }
 
-// ── Load state ────────────────────────────────────────────────────────────────
-type LoadStatus = 'idle' | 'loading' | 'loaded' | 'error';
-
-// ── The full store shape ──────────────────────────────────────────────────────
-interface GovernanceStore {
-
-    // ── Manifest data ─────────────────────────────────────────────────────────
-    manifest: TenantManifest | null;
-    loadStatus: LoadStatus;
-    loadError: string | null;
-
-    // ── UI state ──────────────────────────────────────────────────────────────
-    theme: 'light' | 'dark';
-    selectedItemId: number | null;        // item open in Fix Panel
-    activeLibrary: string | null;        // library selected in Explorer
-
-    // ── Remediation queue filters ─────────────────────────────────────────────
-    queueFilter: 'all' | 'high' | 'medium' | 'low';
-    searchQuery: string;
-
-    // ── Actions — manifest ────────────────────────────────────────────────────
-    loadManifest: (file: File) => Promise<void>;
-    clearManifest: () => void;
-
-    // ── Actions — UI ──────────────────────────────────────────────────────────
-    toggleTheme: () => void;
-    setSelectedItem: (itemId: number | null) => void;
-    setActiveLibrary: (libraryName: string | null) => void;
-    setQueueFilter: (filter: 'all' | 'high' | 'medium' | 'low') => void;
-    setSearchQuery: (query: string) => void;
-
-    // ── Derived selectors ─────────────────────────────────────────────────────
-    getWorkQueue: () => WorkQueueItem[];
-    getLibraryByName: (name: string) => LibraryReport | undefined;
+export interface GovernanceSettings {
+    loggingMode: 'local' | 'sharepoint'
+    spLogListName: string
 }
 
-// ── Store implementation ──────────────────────────────────────────────────────
-export const useGovernanceStore = create<GovernanceStore>((set, get) => ({
+const DEFAULT_SETTINGS: GovernanceSettings = {
+    loggingMode: 'local',
+    spLogListName: 'GovernanceRemediationLog',
+}
 
-    // ── Initial state ─────────────────────────────────────────────────────────
+type LoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
+
+// ─── Store interface ──────────────────────────────────────────────────────────
+
+interface GovernanceState {
+    // Manifest
+    manifest: TenantManifest | null
+    loadStatus: LoadStatus
+    loadError: string | null
+
+    // UI state
+    theme: 'light' | 'dark'
+    selectedItemId: string | null
+    activeLibrary: string | null
+    queueFilter: 'all' | 'high' | 'medium' | 'low'
+    searchQuery: string
+
+    // Settings
+    settings: GovernanceSettings
+
+    // Actions
+    loadManifest: (file: File) => void
+    clearManifest: () => void
+    toggleTheme: () => void
+    setSelectedItem: (id: string | null) => void
+    setActiveLibrary: (name: string | null) => void
+    setQueueFilter: (f: 'all' | 'high' | 'medium' | 'low') => void
+    setSearchQuery: (q: string) => void
+    updateSettings: (patch: Partial<GovernanceSettings>) => void
+    removeFromQueue: (compositeId: string) => void
+
+    // Selectors
+    getWorkQueue: () => WorkQueueItem[]
+    getLibraryByName: (name: string) => TenantManifest['libraries'][number] | undefined
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function readTheme(): 'light' | 'dark' {
+    try {
+        const saved = localStorage.getItem('mg-theme')
+        if (saved === 'dark' || saved === 'light') return saved
+    } catch { }
+    return 'light'
+}
+
+function applyTheme(theme: 'light' | 'dark') {
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark')
+    } else {
+        document.documentElement.classList.remove('dark')
+    }
+    try { localStorage.setItem('mg-theme', theme) } catch { }
+}
+
+function readSettings(): GovernanceSettings {
+    try {
+        const saved = localStorage.getItem('mg-settings')
+        if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) }
+    } catch { }
+    return DEFAULT_SETTINGS
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
+export const useGovernanceStore = create<GovernanceState>((set, get) => ({
+    // ── Initial state ──────────────────────────────────────────────────────────
     manifest: null,
     loadStatus: 'idle',
     loadError: null,
-    theme: (localStorage.getItem('mg-theme') as 'light' | 'dark') ?? 'light',
+    theme: readTheme(),
     selectedItemId: null,
     activeLibrary: null,
     queueFilter: 'all',
     searchQuery: '',
+    settings: readSettings(),
 
-    // ── Load manifest from a dropped/picked JSON file ─────────────────────────
-    loadManifest: async (file: File) => {
-        set({ loadStatus: 'loading', loadError: null });
+    // ── Actions ────────────────────────────────────────────────────────────────
 
-        try {
-            const text = await file.text();
-            const parsed = JSON.parse(text) as TenantManifest;
+    loadManifest: (file: File) => {
+        set({ loadStatus: 'loading', loadError: null })
 
-            // Validate it's a v2.0 manifest — reject old shape
-            if (parsed.schemaVersion !== '2.0') {
-                throw new Error(
-                    `Unsupported manifest version: "${parsed.schemaVersion}". ` +
-                    `Please run the engine again to generate a v2.0 manifest.`
-                );
+        const reader = new FileReader()
+
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result as string
+                const data = JSON.parse(text)
+
+                if (data.schemaVersion !== '2.0') {
+                    set({
+                        loadStatus: 'error',
+                        loadError: `Expected schemaVersion "2.0" but got "${data.schemaVersion ?? 'unknown'}". Re-run the engine to generate a fresh manifest.`,
+                        manifest: null,
+                    })
+                    return
+                }
+
+                set({ loadStatus: 'loaded', manifest: data, loadError: null })
+            } catch {
+                set({
+                    loadStatus: 'error',
+                    loadError: 'Could not parse the file. Make sure it is a valid JSON manifest.',
+                    manifest: null,
+                })
             }
+        }
 
-            if (!parsed.libraries || !Array.isArray(parsed.libraries)) {
-                throw new Error('Invalid manifest: missing libraries array.');
-            }
-
-            set({ manifest: parsed, loadStatus: 'loaded' });
-
-        } catch (err: any) {
+        reader.onerror = () => {
             set({
                 loadStatus: 'error',
-                loadError: err.message ?? 'Failed to parse manifest file.'
-            });
+                loadError: 'Failed to read the file. Please try again.',
+                manifest: null,
+            })
         }
+
+        reader.readAsText(file)
     },
 
-    // ── Clear loaded manifest and reset to idle ───────────────────────────────
-    clearManifest: () => set({
-        manifest: null,
-        loadStatus: 'idle',
-        loadError: null,
-        selectedItemId: null,
-        activeLibrary: null,
-        queueFilter: 'all',
-        searchQuery: ''
-    }),
+    clearManifest: () => {
+        set({
+            manifest: null,
+            loadStatus: 'idle',
+            loadError: null,
+            selectedItemId: null,
+            activeLibrary: null,
+            queueFilter: 'all',
+            searchQuery: '',
+        })
+    },
 
-    // ── Toggle light / dark theme ─────────────────────────────────────────────
     toggleTheme: () => {
-        const next = get().theme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('mg-theme', next);
-        document.documentElement.classList.toggle('dark', next === 'dark');
-        set({ theme: next });
+        const next = get().theme === 'light' ? 'dark' : 'light'
+        applyTheme(next)
+        set({ theme: next })
     },
 
-    // ── UI setters ────────────────────────────────────────────────────────────
-    setSelectedItem: (itemId) => set({ selectedItemId: itemId }),
+    setSelectedItem: (id) => set({ selectedItemId: id }),
+
     setActiveLibrary: (name) => set({ activeLibrary: name }),
-    setQueueFilter: (filter) => set({ queueFilter: filter }),
-    setSearchQuery: (query) => set({ searchQuery: query }),
 
-    // ── Flatten all failed items across all libraries into a work queue ────────
-    // This is what the Remediation Queue table reads from
-    getWorkQueue: (): WorkQueueItem[] => {
-        const manifest = get().manifest;
-        if (!manifest) return [];
+    setQueueFilter: (f) => set({ queueFilter: f }),
 
-        return manifest.libraries.flatMap(lib =>
-            lib.items
-                .filter(item => item.status === 'Fail')
-                .map(item => ({
-                    ...item,
-                    libraryName: lib.libraryName,
-                    libraryUrl: lib.serverRelativeUrl
-                }))
-        );
+    setSearchQuery: (q) => set({ searchQuery: q }),
+
+    updateSettings: (patch) => {
+        set(state => {
+            const next = { ...state.settings, ...patch }
+            try { localStorage.setItem('mg-settings', JSON.stringify(next)) } catch { }
+            return { settings: next }
+        })
     },
 
-    // ── Get a single library by name ──────────────────────────────────────────
-    getLibraryByName: (name: string) => {
-        return get().manifest?.libraries.find(l => l.libraryName === name);
-    }
-}));
+    removeFromQueue: (compositeId: string) => {
+        set(state => {
+            if (!state.manifest) return {}
 
-// ── Apply saved theme on app init ─────────────────────────────────────────────
-// Runs once when the store module is first imported
-const savedTheme = localStorage.getItem('mg-theme') as 'light' | 'dark' | null;
-if (savedTheme === 'dark') {
-    document.documentElement.classList.add('dark');
-}
+            // Parse compositeId back to libraryUrl + itemId
+            const [libraryUrl, itemIdStr] = compositeId.split('::')
+            const itemId = Number(itemIdStr)
+
+            const updatedLibraries = state.manifest.libraries.map(lib => {
+                if (lib.serverRelativeUrl !== libraryUrl) return lib
+
+                const updatedItems: AuditedItem[] = lib.items.map(item =>
+                    item.itemId === itemId
+                        ? { ...item, status: 'Pass' as const, gaps: [], riskScore: 0 }
+                        : item
+                )
+
+                const newPassCount = updatedItems.filter(i => i.status === 'Pass').length
+                const newFailCount = updatedItems.filter(i => i.status === 'Fail').length
+
+                return { ...lib, items: updatedItems, passCount: newPassCount, failCount: newFailCount }
+            })
+
+            const totalPass = updatedLibraries.reduce((sum, l) => sum + l.passCount, 0)
+            const totalFail = updatedLibraries.reduce((sum, l) => sum + l.failCount, 0)
+            const totalItems = state.manifest.summary.totalItems
+            const newRate = totalItems > 0 ? Math.round((totalPass / totalItems) * 1000) / 10 : 0
+
+            return {
+                manifest: {
+                    ...state.manifest,
+                    libraries: updatedLibraries,
+                    summary: {
+                        ...state.manifest.summary,
+                        passCount: totalPass,
+                        failCount: totalFail,
+                        complianceRate: newRate,
+                    },
+                },
+                selectedItemId: state.selectedItemId === compositeId ? null : state.selectedItemId,
+            }
+        })
+    },
+
+    // ── Selectors ──────────────────────────────────────────────────────────────
+
+    getWorkQueue: () => {
+        const { manifest } = get()
+        if (!manifest) return []
+
+        const queue: WorkQueueItem[] = []
+
+        for (const lib of manifest.libraries) {
+            for (const item of lib.items) {
+                if (item.status === 'Fail') {
+                    queue.push({
+                        compositeId: `${lib.serverRelativeUrl}::${item.itemId}`,
+                        itemId: item.itemId,
+                        fileName: item.fileName,
+                        itemUrl: item.itemUrl,
+                        riskScore: item.riskScore,
+                        gaps: item.gaps,
+                        libraryName: lib.libraryName,
+                        libraryUrl: lib.serverRelativeUrl,
+                    })
+                }
+            }
+        }
+
+        return queue
+    },
+
+    getLibraryByName: (name) => {
+        return get().manifest?.libraries.find(l => l.libraryName === name)
+    },
+}))

@@ -31,6 +31,8 @@
   --text2:      #4a5a8a;
   --text3:      #8a9bc4;
   --cyan-text:  #007a6e;
+  --cyan:       #00bfa8;
+  --cyan-l:     #00bfa8;
   --pink:       #e8005a;
   --pink-l:     #ff4d8d;
   --green:      #00a67a;
@@ -53,6 +55,8 @@
   --text2:      #7a93c4;
   --text3:      #3d5278;
   --cyan-text:  #00e5d0;
+  --cyan:       #00bfa8;
+  --cyan-l:     #00bfa8;
   --pink:       #ff4d8d;
   --pink-l:     #ff4d8d;
   --green:      #00e5a0;
@@ -85,4 +89,18 @@ body {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.3; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sidebarGlow {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1;   }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
 }

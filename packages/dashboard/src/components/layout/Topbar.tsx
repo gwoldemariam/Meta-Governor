@@ -1,7 +1,15 @@
+import { useRef } from 'react'
 import { useGovernanceStore } from '../../store/useGovernanceStore'
 
 export default function Topbar() {
-    const { theme, toggleTheme, manifest } = useGovernanceStore()
+    const { theme, toggleTheme, manifest, loadManifest, clearManifest } = useGovernanceStore()
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) loadManifest(file)
+        e.target.value = ''
+    }
 
     return (
         <header style={{
@@ -50,7 +58,7 @@ export default function Topbar() {
             {/* Right — controls */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 
-                {/* Connection status */}
+                {/* LOADED badge */}
                 {manifest && (
                     <div style={{
                         display: 'flex',
@@ -114,25 +122,59 @@ export default function Topbar() {
                     ))}
                 </div>
 
-                {/* Scan button */}
-                <button style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '7px',
-                    padding: '8px 18px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, rgba(0,191,168,0.13), rgba(37,99,235,0.12))',
-                    border: '1.5px solid rgba(0,191,168,0.45)',
-                    color: 'var(--cyan-text)',
-                    fontFamily: 'Plus Jakarta Sans, sans-serif',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    letterSpacing: '0.5px',
-                    cursor: 'pointer',
-                    clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)'
-                }}>
-                    ↻ RUN SCAN
-                </button>
+                {/* Load / Swap manifest button */}
+                {manifest ? (
+                    <button
+                        onClick={() => clearManifest()}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            padding: '8px 18px',
+                            borderRadius: '10px',
+                            background: 'rgba(232,0,90,0.06)',
+                            border: '1.5px solid rgba(232,0,90,0.3)',
+                            color: 'var(--pink)',
+                            fontFamily: 'Plus Jakarta Sans, sans-serif',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ✕ Eject
+                    </button>
+                ) : (
+                    <>
+                        <button
+                            onClick={() => inputRef.current?.click()}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '7px',
+                                padding: '8px 18px',
+                                borderRadius: '10px',
+                                background: 'linear-gradient(135deg, rgba(0,191,168,0.13), rgba(37,99,235,0.12))',
+                                border: '1.5px solid rgba(0,191,168,0.45)',
+                                color: 'var(--cyan-text)',
+                                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                letterSpacing: '0.5px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            ↑ Load Manifest
+                        </button>
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            accept=".json,application/json"
+                            onChange={onFileInput}
+                            style={{ display: 'none' }}
+                        />
+                    </>
+                )}
             </div>
         </header>
     )
