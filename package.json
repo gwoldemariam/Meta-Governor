@@ -5,10 +5,12 @@
   "workspaces": [
     "packages/engine",
     "packages/dashboard",
-    "packages/shared"
+    "packages/shared",
+    "packages/api"
   ],
   "scripts": {
     "audit": "npm run audit --workspace=packages/engine",
-    "build": "npm run build --workspace=packages/engine"
+    "build": "npm run build --workspace=packages/engine",
+    "api": "npm run dev --workspace=packages/api"
   }
 }

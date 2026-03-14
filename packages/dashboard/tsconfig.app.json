@@ -19,6 +19,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
       "@meta-governor/shared": ["../shared/types.ts"],
       "@/*": ["./src/*"]

@@ -13,6 +13,7 @@ export type LibrarySchemaStatus = 'governed' | 'violations' | 'no-schema' | 'emp
 export interface LibraryReport {
     libraryName: string;
     serverRelativeUrl: string;
+    listId?: string;
     siteUrl: string;
     schemaStatus: LibrarySchemaStatus;
     fieldCount: number;

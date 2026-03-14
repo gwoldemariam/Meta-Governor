@@ -377,6 +377,8 @@ function LibBarRow({ lib }: { lib: LibraryReport }) {
 
 export default function HealthDashboard() {
     const manifest = useGovernanceStore(s => s.manifest)
+    const previousComplianceRate = useGovernanceStore(s => s.previousComplianceRate)
+    const previousFailCount = useGovernanceStore(s => s.previousFailCount)
     if (!manifest) return <NoManifest />
 
     const { summary, libraries } = manifest
@@ -392,6 +394,27 @@ export default function HealthDashboard() {
     const governedPass = governedLibraries.reduce((sum, l) => sum + l.passCount, 0)
     const governedTotal = governedLibraries.reduce((sum, l) => sum + l.itemCount, 0)
     const governedRate = governedTotal > 0 ? Math.round((governedPass / governedTotal) * 100) : 0
+
+    // Calculate compliance trend
+    let trend: 'improving' | 'declining' | 'stable' | null = null
+    if (previousComplianceRate !== null) {
+        const diff = governedRate - previousComplianceRate
+        if (diff > 0) trend = 'improving'
+        else if (diff < 0) trend = 'declining'
+        else trend = 'stable'
+    }
+
+    // Calculate failing items trend
+    let failTrend: string
+    if (previousFailCount !== null) {
+        const diff = summary.failCount - previousFailCount
+        if (diff > 0) failTrend = `↑ +${diff} items`
+        else if (diff < 0) failTrend = `↓ ${diff} items`
+        else failTrend = '→ no change'
+    } else {
+        // First load - show static message
+        failTrend = summary.failCount > 0 ? 'action needed' : '✓ all clear'
+    }
 
     // Schema coverage — how much of the tenant is even being managed
     const coverageRate = summary.totalLibraries > 0
@@ -441,7 +464,7 @@ export default function HealthDashboard() {
                     value={summary.failCount}
                     sub="require remediation"
                     accent={summary.failCount > 0 ? 'pink' : 'green'} icon="⚠"
-                    trend={summary.failCount > 0 ? '↑ action needed' : '✓ all clear'}
+                    trend={failTrend}
                 />
                 <MetricCard
                     label="Total Libraries"
@@ -472,14 +495,26 @@ export default function HealthDashboard() {
                                 // governed libraries only · {governedLibraries.length} in scope
                             </div>
                         </div>
-                        <div style={{
-                            fontFamily: 'DM Mono, monospace', fontSize: '9px',
-                            letterSpacing: '1.5px', padding: '3px 10px', borderRadius: '6px',
-                            textTransform: 'uppercase',
-                            background: 'rgba(0,166,122,0.08)', border: '1px solid rgba(0,166,122,0.25)', color: 'var(--green)'
-                        }}>
-                            ↑ Improving
-                        </div>
+                        {trend && (
+                            <div style={{
+                                fontFamily: 'DM Mono, monospace', fontSize: '9px',
+                                letterSpacing: '1.5px', padding: '3px 10px', borderRadius: '6px',
+                                textTransform: 'uppercase',
+                                background: trend === 'improving' ? 'rgba(0,166,122,0.08)'
+                                    : trend === 'declining' ? 'rgba(232,0,90,0.08)'
+                                        : 'rgba(140,140,140,0.08)',
+                                border: trend === 'improving' ? '1px solid rgba(0,166,122,0.25)'
+                                    : trend === 'declining' ? '1px solid rgba(232,0,90,0.25)'
+                                        : '1px solid rgba(140,140,140,0.25)',
+                                color: trend === 'improving' ? 'var(--green)'
+                                    : trend === 'declining' ? 'var(--pink)'
+                                        : 'var(--text3)'
+                            }}>
+                                {trend === 'improving' ? '↑ Improving'
+                                    : trend === 'declining' ? '↓ Declining'
+                                        : '→ Stable'}
+                            </div>
+                        )}
                     </div>
 
                     {/* Donut + legend side by side */}

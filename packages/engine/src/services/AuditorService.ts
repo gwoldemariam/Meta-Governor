@@ -29,13 +29,25 @@ export class AuditorService {
 
         if (customFields.length === 0) return [];
 
-        // Always include Id and FileRef alongside custom fields
-        const customFieldNames = customFields.map((f: any) => f.InternalName).join(",");
-        const selectClause = `Id,FileLeafRef,FileRef,${customFieldNames}`;
+        // Separate lookup fields — they require $expand and subfield selection
+        const lookupTypes = ['Lookup', 'LookupMulti']
+        const regularFields = customFields.filter(f => !lookupTypes.includes(f.TypeAsString))
+        const lookupFields = customFields.filter(f => lookupTypes.includes(f.TypeAsString))
+
+        const selectParts = [
+            'Id',
+            'FileLeafRef',
+            'FileRef',
+            ...regularFields.map((f: any) => f.InternalName),
+            ...lookupFields.map((f: any) => `${f.InternalName}/Id,${f.InternalName}/Title`),
+        ].join(',')
+
+        const expandParts = lookupFields.map((f: any) => f.InternalName).join(',')
 
         const results: AuditedItem[] = [];
-        let nextUrl: string | null =
-            `/_api/web/lists(guid'${listId}')/items?$select=${selectClause}&$top=500`;
+        let nextUrl: string | null = expandParts
+            ? `/_api/web/lists(guid'${listId}')/items?$select=${selectParts}&$expand=${expandParts}&$top=500`
+            : `/_api/web/lists(guid'${listId}')/items?$select=${selectParts}&$top=500`;
 
         // Paginate through ALL items via $skiptoken
         while (nextUrl) {
@@ -54,11 +66,11 @@ export class AuditorService {
                     const baseUrl = new URL(siteUrl).origin;
 
                     results.push({
-                        itemId:        item.Id,
-                        fileName:      item.FileLeafRef,
-                        itemUrl:       `${baseUrl}${item.FileRef}`,
-                        status:        gaps.length === 0 ? 'Pass' : 'Fail',
-                        riskScore:     gaps.length,
+                        itemId: item.Id,
+                        fileName: item.FileLeafRef,
+                        itemUrl: `${baseUrl}${item.FileRef}`,
+                        status: gaps.length === 0 ? 'Pass' : 'Fail',
+                        riskScore: gaps.length,
                         gaps,
                         aiSuggestions: null
                     });
@@ -66,12 +78,12 @@ export class AuditorService {
                 } catch (itemErr: any) {
                     // Flag inaccessible items rather than crashing the whole scan
                     results.push({
-                        itemId:        item.Id ?? 0,
-                        fileName:      item.FileLeafRef ?? 'Unknown',
-                        itemUrl:       '',
-                        status:        'AccessDenied',
-                        riskScore:     0,
-                        gaps:          [],
+                        itemId: item.Id ?? 0,
+                        fileName: item.FileLeafRef ?? 'Unknown',
+                        itemUrl: '',
+                        status: 'AccessDenied',
+                        riskScore: 0,
+                        gaps: [],
                         aiSuggestions: null
                     });
                 }
@@ -125,15 +137,15 @@ export class AuditorService {
                 default:
                     // Text, Note, Number, Choice, Boolean
                     isEmpty = value === null ||
-                              value === undefined ||
-                              String(value).trim() === '';
+                        value === undefined ||
+                        String(value).trim() === '';
             }
 
             if (isEmpty) {
                 gaps.push({
-                    displayName:    field.Title,
-                    internalName:   field.InternalName,
-                    typeAsString:   field.TypeAsString,
+                    displayName: field.Title,
+                    internalName: field.InternalName,
+                    typeAsString: field.TypeAsString,
                     suggestedValue: null
                 });
             }

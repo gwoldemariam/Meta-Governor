@@ -9,5 +9,13 @@ export default defineConfig({
       '@meta-governor/shared': path.resolve(__dirname, '../shared/types.ts'),
       '@': path.resolve(__dirname, './src')
     }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_URL ?? 'http://localhost:3001',
+        changeOrigin: true,
+      }
+    }
   }
 })

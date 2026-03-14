@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { TenantManifest, AuditedItem, ItemGap } from '@meta-governor/shared'
 
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3001'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface WorkQueueItem {
@@ -25,6 +27,19 @@ const DEFAULT_SETTINGS: GovernanceSettings = {
 }
 
 type LoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
+type ReauditStatus = 'idle' | 'running' | 'done' | 'error'
+
+export interface LibraryProgress {
+    libraryName: string
+    status: 'pending' | 'scanning' | 'complete'
+    newItemsFound?: number
+}
+
+export interface ReauditSummary {
+    totalNewItems: number
+    librariesScanned: number
+    totalNewLibraries: number
+}
 
 // ─── Store interface ──────────────────────────────────────────────────────────
 
@@ -33,6 +48,16 @@ interface GovernanceState {
     manifest: TenantManifest | null
     loadStatus: LoadStatus
     loadError: string | null
+
+    // Re-audit
+    reauditStatus: ReauditStatus
+    reauditError: string | null
+    reauditedAt: string | null
+    libraryProgress: LibraryProgress[]
+    reauditSummary: ReauditSummary | null
+    showReauditToast: boolean
+    previousComplianceRate: number | null  // For trend tracking
+    previousFailCount: number | null       // For failing items trend
 
     // UI state
     theme: 'light' | 'dark'
@@ -54,6 +79,8 @@ interface GovernanceState {
     setSearchQuery: (q: string) => void
     updateSettings: (patch: Partial<GovernanceSettings>) => void
     removeFromQueue: (compositeId: string) => void
+    triggerReaudit: () => Promise<void>
+    dismissReauditToast: () => void
 
     // Selectors
     getWorkQueue: () => WorkQueueItem[]
@@ -94,6 +121,16 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
     manifest: null,
     loadStatus: 'idle',
     loadError: null,
+
+    reauditStatus: 'idle',
+    reauditError: null,
+    reauditedAt: null,
+    libraryProgress: [],
+    reauditSummary: null,
+    showReauditToast: false,
+    previousComplianceRate: null,
+    previousFailCount: null,
+
     theme: readTheme(),
     selectedItemId: null,
     activeLibrary: null,
@@ -123,6 +160,10 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 }
 
                 set({ loadStatus: 'loaded', manifest: data, loadError: null })
+
+                // Auto-trigger re-audit silently after manifest loads
+                setTimeout(() => { get().triggerReaudit() }, 300)
+
             } catch {
                 set({
                     loadStatus: 'error',
@@ -152,6 +193,14 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
             activeLibrary: null,
             queueFilter: 'all',
             searchQuery: '',
+            reauditStatus: 'idle',
+            reauditError: null,
+            reauditedAt: null,
+            libraryProgress: [],
+            reauditSummary: null,
+            showReauditToast: false,
+            previousComplianceRate: null,
+            previousFailCount: null,
         })
     },
 
@@ -181,7 +230,6 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
         set(state => {
             if (!state.manifest) return {}
 
-            // Parse compositeId back to libraryUrl + itemId
             const [libraryUrl, itemIdStr] = compositeId.split('::')
             const itemId = Number(itemIdStr)
 
@@ -197,7 +245,20 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 const newPassCount = updatedItems.filter(i => i.status === 'Pass').length
                 const newFailCount = updatedItems.filter(i => i.status === 'Fail').length
 
-                return { ...lib, items: updatedItems, passCount: newPassCount, failCount: newFailCount }
+                // Update schemaStatus based on new failCount
+                let newSchemaStatus = lib.schemaStatus
+                if (lib.schemaStatus !== 'no-schema' && lib.schemaStatus !== 'empty') {
+                    newSchemaStatus = newFailCount > 0 ? 'violations' : 'governed'
+                }
+
+                return {
+                    ...lib,
+                    items: updatedItems,
+                    itemCount: updatedItems.length,
+                    passCount: newPassCount,
+                    failCount: newFailCount,
+                    schemaStatus: newSchemaStatus
+                }
             })
 
             const totalPass = updatedLibraries.reduce((sum, l) => sum + l.passCount, 0)
@@ -219,6 +280,147 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 selectedItemId: state.selectedItemId === compositeId ? null : state.selectedItemId,
             }
         })
+    },
+
+    triggerReaudit: async () => {
+        const { manifest, reauditStatus } = get()
+        if (!manifest) return
+        if (reauditStatus === 'running') return     // already in flight
+
+        const MIN_DISPLAY_TIME = 800 // ms
+        const startTime = Date.now()
+
+        // Initialize progress for all governed libraries
+        const governedLibraries = manifest.libraries.filter(lib =>
+            lib.schemaStatus === 'governed' || lib.schemaStatus === 'violations'
+        )
+
+        const initialProgress: LibraryProgress[] = governedLibraries.map(lib => ({
+            libraryName: lib.libraryName,
+            status: 'pending' as const,
+        }))
+
+        set({
+            reauditStatus: 'running',
+            reauditError: null,
+            libraryProgress: initialProgress,
+            showReauditToast: false,
+        })
+
+        // Simulate per-library scanning with staggered updates
+        const simulateProgress = async () => {
+            for (let i = 0; i < governedLibraries.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 150))
+
+                set(state => ({
+                    libraryProgress: state.libraryProgress.map((lib, idx) =>
+                        idx === i ? { ...lib, status: 'scanning' as const } : lib
+                    )
+                }))
+            }
+        }
+
+        // Start progress simulation
+        simulateProgress()
+
+        try {
+            const res = await fetch(`${API_BASE}/api/reaudit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ manifest }),
+            })
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+                throw new Error(err.error ?? `HTTP ${res.status}`)
+            }
+
+            const result = await res.json()
+
+            // Build progress for ALL libraries in the result (includes new ones)
+            let totalNewItems = 0
+            let totalNewLibraries = 0
+
+            const oldLibraryUrls = new Set(governedLibraries.map(lib => lib.serverRelativeUrl))
+
+            const updatedProgress: LibraryProgress[] = result.libraries
+                .filter((lib: any) => lib.schemaStatus === 'governed' || lib.schemaStatus === 'violations')
+                .map((freshLib: any) => {
+                    const oldLib = governedLibraries.find(lib => lib.serverRelativeUrl === freshLib.serverRelativeUrl)
+
+                    // Check if this is a brand new library
+                    const isNewLibrary = !oldLibraryUrls.has(freshLib.serverRelativeUrl)
+                    if (isNewLibrary) {
+                        totalNewLibraries++
+                    }
+
+                    // Calculate new items (only for existing libraries)
+                    const oldItemCount = oldLib?.itemCount ?? 0
+                    const newItemCount = freshLib.itemCount
+                    const newItems = Math.max(0, newItemCount - oldItemCount)
+                    totalNewItems += newItems
+
+                    return {
+                        libraryName: freshLib.libraryName,
+                        status: 'complete' as const,
+                        newItemsFound: newItems > 0 ? newItems : undefined,
+                    }
+                })
+
+            // Enforce minimum display time
+            const elapsed = Date.now() - startTime
+            if (elapsed < MIN_DISPLAY_TIME) {
+                await new Promise(resolve => setTimeout(resolve, MIN_DISPLAY_TIME - elapsed))
+            }
+
+            // Merge fresh library data back into manifest
+            set(state => {
+                if (!state.manifest) return {}
+
+                // Save current metrics before updating (for trend tracking)
+                const previousRate = state.manifest.summary?.complianceRate ?? null
+                const previousFails = state.manifest.summary?.failCount ?? null
+
+                // Use the complete library list from re-audit result
+                // Re-audit now returns ALL libraries (old + new), so we don't need to merge
+                return {
+                    manifest: {
+                        ...state.manifest,
+                        libraries: result.libraries,  // Replace entirely with fresh data
+                        summary: result.summary,      // Replace entirely with fresh summary
+                    },
+                    reauditStatus: 'done' as ReauditStatus,
+                    reauditError: null,
+                    reauditedAt: result.reauditedAt,
+                    libraryProgress: updatedProgress,
+                    reauditSummary: {
+                        totalNewItems,
+                        librariesScanned: updatedProgress.length,  // Actual number scanned
+                        totalNewLibraries,
+                    },
+                    showReauditToast: true,
+                    previousComplianceRate: previousRate,
+                    previousFailCount: previousFails,
+                }
+            })
+
+            // Auto-dismiss toast after 4 seconds
+            setTimeout(() => {
+                set({ showReauditToast: false })
+            }, 4000)
+
+        } catch (err: any) {
+            console.warn('[reaudit] failed:', err.message)
+            set({
+                reauditStatus: 'error',
+                reauditError: err.message ?? 'Re-audit failed',
+                libraryProgress: [],
+            })
+        }
+    },
+
+    dismissReauditToast: () => {
+        set({ showReauditToast: false })
     },
 
     // ── Selectors ──────────────────────────────────────────────────────────────
