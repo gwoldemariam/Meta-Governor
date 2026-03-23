@@ -1,7 +1,30 @@
 {
   "name": "meta-governor",
   "version": "1.0.0",
-  "private": true,
+  "description": "SharePoint metadata governance and remediation platform - audit, track, and fix missing metadata across SharePoint Online",
+  "keywords": [
+    "sharepoint",
+    "metadata",
+    "governance",
+    "compliance",
+    "microsoft365",
+    "sharepoint-online",
+    "remediation",
+    "audit",
+    "typescript",
+    "react"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gwoldemariam/meta-governor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gwoldemariam/meta-governor/issues"
+  },
+  "homepage": "https://github.com/gwoldemariam/meta-governor#readme",
+  "license": "MIT",
+  "author": "Getaneh Woldemariam <gwoldeyesus@hotmail.com>",
+  "private": false,
   "workspaces": [
     "packages/engine",
     "packages/dashboard",
@@ -11,6 +34,12 @@
   "scripts": {
     "audit": "npm run audit --workspace=packages/engine",
     "build": "npm run build --workspace=packages/engine",
-    "api": "npm run dev --workspace=packages/api"
+    "api": "npm run dev --workspace=packages/api",
+    "dashboard": "npm run dev --workspace=packages/dashboard",
+    "build:all": "npm run build --workspaces"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
   }
 }

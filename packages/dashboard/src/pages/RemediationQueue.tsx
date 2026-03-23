@@ -431,7 +431,8 @@ export default function RemediationQueue() {
                                             transition: 'background 0.15s',
                                             cursor: 'pointer'
                                         }}
-                                        onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = 'rgba(0,191,168,0.03)'}
+                                        onClick={() => setSelectedItem(row.original.compositeId)}
+                                        onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = 'rgba(232,0,90,0.04)'}
                                         onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
                                     >
                                         {row.getVisibleCells().map(cell => (

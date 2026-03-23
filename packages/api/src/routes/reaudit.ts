@@ -2,7 +2,6 @@ import { Router, Request, Response } from 'express'
 import { getConfidentialClient } from '../auth/oboClient'
 
 export const reauditRouter = Router()
-console.log('[reaudit] router loaded')
 
 // ─── TypeScript Interfaces ────────────────────────────────────────────────────
 
@@ -256,8 +255,6 @@ reauditRouter.post('/', async (req: Request, res: Response) => {
     try {
         const token = await getToken(manifest.siteUrl)
 
-        console.log('[reaudit] Discovering all libraries from SharePoint...')
-
         // 1. Discover ALL current libraries in SharePoint
         const spLibraries = await discoverAllLibraries(token, manifest.siteUrl)
 
@@ -293,7 +290,6 @@ reauditRouter.post('/', async (req: Request, res: Response) => {
 
             // Skip libraries with no schema
             if (spFields.length === 0) {
-                console.log(`[reaudit] ⊘ ${spLib.title}: no governance schema`)
                 allLibraries.push({
                     libraryName: spLib.title,
                     serverRelativeUrl: spLib.serverRelativeUrl,
@@ -409,13 +405,6 @@ reauditRouter.post('/', async (req: Request, res: Response) => {
                 typeAsString: f.typeAsString,
                 ...(f.allowedValues && { allowedValues: f.allowedValues })
             }))
-
-            const newItemsCount = spItems.length - existingItems.length
-            if (newItemsCount > 0) {
-                console.log(`[reaudit] ✓ ${spLib.title}: ${passCount} pass, ${failCount} fail (+${newItemsCount} new)`)
-            } else {
-                console.log(`[reaudit] ✓ ${spLib.title}: ${passCount} pass, ${failCount} fail`)
-            }
 
             allLibraries.push({
                 libraryName: spLib.title,

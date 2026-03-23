@@ -7,7 +7,6 @@ let _client: ConfidentialClientApplication | null = null
 const _cacheVersion = Date.now()
 
 export function getConfidentialClient(): ConfidentialClientApplication {
-    console.log('[oboClient] cache version:', _cacheVersion)
     if (_client) return _client
 
     const certRelPath = process.env.CERT_PATH
@@ -16,7 +15,6 @@ export function getConfidentialClient(): ConfidentialClientApplication {
     }
 
     const keyPath = path.resolve(__dirname, '../../', certRelPath)
-    console.log('[oboClient] loading cert from:', keyPath)
 
     const privateKey = fs.readFileSync(keyPath, 'utf8')
 

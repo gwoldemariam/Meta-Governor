@@ -48,12 +48,11 @@ fieldsRouter.get('/terms', async (req: Request, res: Response) => {
             { headers: spHeaders(siteToken) }
         )
         if (!fieldRes.ok) throw new Error('Failed to fetch field schema')
-        const fieldJson = await fieldRes.json()
+        const fieldJson: any = await fieldRes.json()
         const field = fieldJson?.d?.results?.[0]
         if (!field) return res.status(404).json({ error: 'Field not found' })
 
         const termSetId = field.TermSetId
-        console.log('[fields/terms] termSetId:', termSetId)
 
         if (!termSetId) {
             return res.status(400).json({ error: 'Field is not a valid taxonomy field' })
@@ -72,10 +71,12 @@ fieldsRouter.get('/terms', async (req: Request, res: Response) => {
             const errText = await siteRes.text()
             throw new Error(`Failed to fetch site from Graph: ${errText.slice(0, 200)}`)
         }
-        const siteJson = await siteRes.json()
-        const siteId = siteJson?.id
+        const siteJson: any = await siteRes.json()
+        const siteId: string = siteJson?.id
 
-        console.log('[fields/terms] siteId:', siteId)
+        if (!siteId) {
+            throw new Error('Failed to get site ID from Graph API')
+        }
 
         // 3. Fetch terms via Graph termStore
         const termsRes = await fetch(
@@ -93,13 +94,12 @@ fieldsRouter.get('/terms', async (req: Request, res: Response) => {
             })
         }
 
-        const termsJson = await termsRes.json()
+        const termsJson: any = await termsRes.json()
         const terms = (termsJson?.value ?? []).map((t: any) => ({
             label: t.labels?.[0]?.name ?? t.defaultLabel ?? t.id,
             guid: t.id,
         }))
 
-        console.log(`[fields/terms] ✓ fetched ${terms.length} terms for ${fieldInternalName}`)
         return res.json({ terms })
 
     } catch (err: any) {
@@ -136,14 +136,13 @@ fieldsRouter.get('/resolveuser', async (req: Request, res: Response) => {
             return res.status(404).json({ error: `Could not resolve user: ${upn}`, detail: errText })
         }
 
-        const userJson = await userRes.json()
+        const userJson: any = await userRes.json()
         const user = {
             id: userJson?.d?.Id,
             displayName: userJson?.d?.Title,
             email: userJson?.d?.Email,
         }
 
-        console.log(`[fields/resolveuser] ✓ resolved ${upn} → ID ${user.id}`)
         return res.json({ user })
 
     } catch (err: any) {
@@ -168,7 +167,7 @@ fieldsRouter.get('/lookupitems', async (req: Request, res: Response) => {
             { headers: spHeaders(token) }
         )
         if (!fieldRes.ok) throw new Error('Failed to fetch field schema')
-        const fieldJson = await fieldRes.json()
+        const fieldJson: any = await fieldRes.json()
         const field = fieldJson?.d?.results?.[0]
         if (!field) return res.status(404).json({ error: 'Field not found' })
 
@@ -184,14 +183,13 @@ fieldsRouter.get('/lookupitems', async (req: Request, res: Response) => {
             { headers: spHeaders(token) }
         )
         if (!itemsRes.ok) throw new Error('Failed to fetch lookup items')
-        const itemsJson = await itemsRes.json()
+        const itemsJson: any = await itemsRes.json()
 
         const items = (itemsJson?.d?.results ?? []).map((item: any) => ({
             id: item.ID,
             label: item[lookupFieldName] ?? item.Title ?? `Item ${item.ID}`,
         }))
 
-        console.log(`[fields/lookupitems] ✓ fetched ${items.length} items for ${fieldInternalName}`)
         return res.json({ items })
 
     } catch (err: any) {
@@ -207,6 +205,6 @@ fieldsRouter.get('/debugfields', async (req: Request, res: Response) => {
         `${siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/fields?$filter=TypeAsString eq 'Note'&$select=InternalName,Title,Id,Hidden`,
         { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json;odata=verbose' } }
     )
-    const j = await r.json()
+    const j: any = await r.json()
     return res.json(j?.d?.results ?? j)
 })

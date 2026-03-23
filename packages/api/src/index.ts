@@ -5,13 +5,15 @@ import * as net from 'net'
 import { remediateRouter } from './routes/remediate'
 import { fieldsRouter } from './routes/fields'
 import { reauditRouter } from './routes/reaudit'
+import { auditRouter } from './routes/audit'
+import { loggingRouter } from './routes/logging'
 
 const app = express()
 
 app.use(cors({
     origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173',
     allowedHeaders: ['Content-Type', 'Authorization'],
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
 }))
 
 app.use(express.json({ limit: '10mb' }))   // manifests can be large
@@ -23,6 +25,8 @@ app.get('/api/health', (_req, res) => {
 app.use('/api', remediateRouter)
 app.use('/api', fieldsRouter)
 app.use('/api/reaudit', reauditRouter)
+app.use('/api/audit', auditRouter)
+app.use('/api/logging', loggingRouter)
 
 app.post('/api/reaudit-test', (_req, res) => res.json({ ok: true }))
 

@@ -71,6 +71,7 @@ interface GovernanceState {
 
     // Actions
     loadManifest: (file: File) => void
+    setManifest: (manifest: TenantManifest) => void
     clearManifest: () => void
     toggleTheme: () => void
     setSelectedItem: (id: string | null) => void
@@ -184,6 +185,14 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
         reader.readAsText(file)
     },
 
+    setManifest: (manifest: TenantManifest) => {
+        set({
+            manifest,
+            loadStatus: 'loaded',
+            loadError: null,
+        })
+    },
+
     clearManifest: () => {
         set({
             manifest: null,
@@ -199,6 +208,11 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
             libraryProgress: [],
             reauditSummary: null,
             showReauditToast: false,
+            // Reset logging settings to default (Local mode)
+            settings: {
+                loggingMode: 'local',
+                spLogListName: 'GovernanceRemediationLog',
+            },
             previousComplianceRate: null,
             previousFailCount: null,
         })

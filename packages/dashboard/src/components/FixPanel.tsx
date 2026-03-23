@@ -731,12 +731,40 @@ export default function FixPanel() {
 
     const handleSave = async () => {
         if (!queueItem || !manifest) return
-        setSaving(true)
+
         setSaveError(null)
+
+        // Get logging settings from store
+        const settings = useGovernanceStore.getState().settings
+
+        // Validate SharePoint list exists if SharePoint logging is enabled
+        if (settings.loggingMode === 'sharepoint') {
+            try {
+                const checkUrl = `${(import.meta.env as any).VITE_API_URL}/api/logging/check?siteUrl=${encodeURIComponent(manifest.siteUrl)}&listName=${encodeURIComponent(settings.spLogListName)}`
+
+                const checkRes = await fetch(checkUrl)
+
+                if (!checkRes.ok) {
+                    const errorMsg = `SharePoint logging is enabled but the list "${settings.spLogListName}" doesn't exist. Please go to Settings and click Save to create the list, or switch to Local logging mode.`
+                    console.error('[FixPanel]', errorMsg)
+                    setSaveError(errorMsg)
+                    return
+                }
+
+            } catch (err: any) {
+                const errorMsg = 'Failed to verify SharePoint logging list. Please check your settings.'
+                console.error('[FixPanel]', errorMsg, err)
+                setSaveError(errorMsg)
+                return
+            }
+        }
+
+        setSaving(true)
 
         try {
             const fields = queueItem.gaps.map(g => ({
                 internalName: g.internalName,
+                displayName: g.displayName,
                 typeAsString: g.typeAsString,
                 value: fieldValues[g.internalName] ?? '',
             }))
@@ -745,7 +773,12 @@ export default function FixPanel() {
                 siteUrl: manifest.siteUrl,
                 libraryName: queueItem.libraryName,
                 itemId: queueItem.itemId,
+                fileName: queueItem.fileName,
                 fields,
+                loggingSettings: {
+                    loggingMode: settings.loggingMode,
+                    spLogListName: settings.spLogListName
+                }
             })
 
             const logFields: FieldValue[] = queueItem.gaps.map(g => ({
@@ -777,7 +810,6 @@ export default function FixPanel() {
             setSaving(false)
         }
     }
-    console.log('[FixPanel] libraryName:', libraryName, '| siteUrl:', manifest?.siteUrl, '| queueItem:', queueItem?.libraryName)
     if (!selectedItemId || !queueItem) return null
 
     return (

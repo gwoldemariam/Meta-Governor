@@ -1,14 +1,22 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useGovernanceStore, LibraryProgress } from '../../store/useGovernanceStore'
+import AuditProgressModal from '../AuditProgressModal'
+import SiteUrlInputModal from '../SiteUrlInputModal'
 
 export default function Topbar() {
     const { theme, toggleTheme, manifest, loadManifest, clearManifest } = useGovernanceStore()
+    const setManifest = useGovernanceStore(s => s.setManifest)
     const reauditStatus = useGovernanceStore(s => s.reauditStatus)
     const reauditError = useGovernanceStore(s => s.reauditError)
     const reauditedAt = useGovernanceStore(s => s.reauditedAt)
     const libraryProgress = useGovernanceStore(s => s.libraryProgress)
     const triggerReaudit = useGovernanceStore(s => s.triggerReaudit)
     const inputRef = useRef<HTMLInputElement>(null)
+
+    // Full audit state
+    const [showAuditModal, setShowAuditModal] = useState(false)
+    const [auditJobId, setAuditJobId] = useState<string | null>(null)
+    const [showSiteUrlInput, setShowSiteUrlInput] = useState(false)
 
     const isRunning = reauditStatus === 'running'
     const isDone = reauditStatus === 'done'
@@ -19,6 +27,42 @@ export default function Topbar() {
         if (file) loadManifest(file)
         e.target.value = ''
     }
+
+    const runFullAudit = async (siteUrl?: string) => {
+        // If no site URL provided and no manifest, show input modal
+        if (!siteUrl && !manifest?.siteUrl) {
+            setShowSiteUrlInput(true)
+            return
+        }
+
+        // Use provided URL or fall back to manifest URL
+        const targetSiteUrl = siteUrl || manifest!.siteUrl
+
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/audit/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ siteUrl: targetSiteUrl }),
+            })
+
+            if (!res.ok) throw new Error('Failed to start audit')
+
+            const { jobId } = await res.json()
+            setAuditJobId(jobId)
+            setShowAuditModal(true)
+            setShowSiteUrlInput(false)
+        } catch (err) {
+            console.error('[Topbar] Failed to start full audit:', err)
+            alert('Failed to start audit. Check console for details.')
+        }
+    }
+
+    const onAuditComplete = (newManifest: any) => {
+        setManifest(newManifest)
+        setShowAuditModal(false)
+        setAuditJobId(null)
+    }
+
 
     // Determine what to show below the site URL
     const showProgress = isRunning && libraryProgress.length > 0
@@ -251,6 +295,49 @@ export default function Topbar() {
                         </div>
                     )}
 
+                    {/* Run Full Audit - Always visible */}
+                    <button
+                        onClick={() => runFullAudit()}
+                        disabled={isRunning}
+                        title={manifest
+                            ? "Run complete audit from scratch (discovers new libraries and fields)"
+                            : "Start your first audit - enter SharePoint site URL"
+                        }
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '7px 14px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, rgba(0,229,255,0.1) 0%, rgba(0,166,122,0.1) 100%)',
+                            border: '1px solid rgba(0,229,255,0.3)',
+                            color: 'var(--cyan-text)',
+                            fontFamily: 'DM Mono, monospace',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            cursor: isRunning ? 'not-allowed' : 'pointer',
+                            opacity: isRunning ? 0.5 : 1,
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            if (!isRunning) {
+                                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,229,255,0.15) 0%, rgba(0,166,122,0.15) 100%)'
+                                e.currentTarget.style.borderColor = 'rgba(0,229,255,0.5)'
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!isRunning) {
+                                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,229,255,0.1) 0%, rgba(0,166,122,0.1) 100%)'
+                                e.currentTarget.style.borderColor = 'rgba(0,229,255,0.3)'
+                            }
+                        }}
+                    >
+                        <span>🔍</span>
+                        {manifest ? 'Full Audit' : 'Start Audit'}
+                    </button>
+
                     {/* Refresh from SharePoint */}
                     {manifest && (
                         <button
@@ -409,6 +496,25 @@ export default function Topbar() {
 
             {/* Re-audit Summary Toast */}
             <ReauditToast />
+
+            {/* Site URL Input Modal */}
+            {showSiteUrlInput && (
+                <SiteUrlInputModal
+                    onSubmit={(url) => runFullAudit(url)}
+                    onCancel={() => setShowSiteUrlInput(false)}
+                />
+            )}
+
+            {/* Full Audit Progress Modal */}
+            <AuditProgressModal
+                isOpen={showAuditModal}
+                jobId={auditJobId}
+                onComplete={onAuditComplete}
+                onClose={() => {
+                    setShowAuditModal(false)
+                    setAuditJobId(null)
+                }}
+            />
         </>
     )
 }

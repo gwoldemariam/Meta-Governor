@@ -7,7 +7,12 @@ interface RemediateBody {
     siteUrl: string
     libraryName: string
     itemId: number
-    fields: { internalName: string; value: string; typeAsString: string }[]
+    fileName: string
+    fields: { internalName: string; displayName: string; value: string; typeAsString: string }[]
+    loggingSettings?: {
+        loggingMode: 'local' | 'sharepoint'
+        spLogListName: string
+    }
 }
 
 function buildFieldPatch(
@@ -80,10 +85,6 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Missing required fields in request body' })
         }
 
-        console.log('[remediate] fields received:', JSON.stringify(
-            fields.map(f => ({ name: f.internalName, type: f.typeAsString }))
-        ))
-
         // 1. Acquire token
         const spOrigin = new URL(siteUrl).origin
         const client = getConfidentialClient()
@@ -108,14 +109,26 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
         if (!metaRes.ok) {
             return res.status(502).json({ error: 'Failed to fetch list metadata from SharePoint' })
         }
-        const metaJson = await metaRes.json()
+        const metaJson: any = await metaRes.json()
         const entityType = metaJson?.d?.ListItemEntityTypeFullName
         if (!entityType) {
             return res.status(500).json({ error: 'Could not resolve ListItemEntityTypeFullName' })
         }
-        console.log(`[remediate] entity type: ${entityType}`)
 
-        // 3. Separate taxonomy from regular fields
+        // 3. Fetch current item to capture old values for logging
+        const itemRes = await fetch(
+            `${siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(libraryName)}')/items(${itemId})`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json;odata=nometadata',
+                }
+            }
+        )
+
+        const oldItemData: any = itemRes.ok ? await itemRes.json() : {}
+
+        // 4. Separate taxonomy from regular fields
         const taxonomyFields = fields.filter(f =>
             f.typeAsString === 'TaxonomyFieldType' ||
             f.typeAsString === 'TaxonomyFieldTypeMulti'
@@ -134,12 +147,10 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
             'IF-MATCH': '*',
         }
 
-        // 4. PATCH regular fields all at once
+        // 5. PATCH regular fields all at once
         if (regularFields.length > 0) {
             const regularBody: Record<string, any> = { __metadata: { type: entityType } }
             for (const f of regularFields) buildFieldPatch(regularBody, f)
-
-            console.log('[remediate] regular PATCH body:', JSON.stringify(regularBody))
 
             const spRes = await fetch(endpoint, {
                 method: 'POST',
@@ -151,10 +162,9 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
                 console.error('[remediate] regular PATCH failed:', errText)
                 return res.status(502).json({ error: 'SharePoint PATCH failed', detail: errText })
             }
-            console.log(`[remediate] ✓ patched ${regularFields.length} regular fields`)
         }
 
-        // 5. PATCH taxonomy fields via ValidateUpdateListItem
+        // 6. PATCH taxonomy fields via ValidateUpdateListItem
         // FieldValue format: "Label|GUID" for single, "Label1|GUID1;Label2|GUID2" for multi
         if (taxonomyFields.length > 0) {
 
@@ -179,8 +189,6 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
                 bNewDocumentUpdate: false,
             }
 
-            console.log('[remediate] ValidateUpdateListItem body:', JSON.stringify(validateBody))
-
             const validateRes = await fetch(
                 `${siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(libraryName)}')/items(${itemId})/ValidateUpdateListItem`,
                 {
@@ -194,9 +202,8 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
                 }
             )
 
-            const validateJson = await validateRes.json()
+            const validateJson: any = await validateRes.json()
             const results = validateJson?.d?.ValidateUpdateListItem?.results ?? validateJson
-            console.log('[remediate] ValidateUpdateListItem response:', JSON.stringify(results))
 
             // Check for field-level errors
             const fieldErrors = (Array.isArray(results) ? results : [])
@@ -214,11 +221,37 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
                 console.error('[remediate] ValidateUpdateListItem failed:', errText)
                 return res.status(502).json({ error: 'SharePoint taxonomy update failed', detail: errText })
             }
-
-            console.log(`[remediate] ✓ taxonomy fields updated via ValidateUpdateListItem`)
         }
 
-        console.log(`[remediate] ✓ all fields patched for item ${itemId}`)
+        // Write to SharePoint log if enabled
+        const { loggingSettings, fileName } = req.body as RemediateBody
+        if (loggingSettings?.loggingMode === 'sharepoint') {
+            try {
+                // Consolidate all field fixes into a single log entry
+                await writeLogToSharePoint(
+                    siteUrl,
+                    loggingSettings.spLogListName,
+                    token,
+                    {
+                        itemId,
+                        fileName: fileName || `Item ${itemId}`,
+                        libraryName,
+                        fields: fields.map(f => ({
+                            fieldName: f.displayName || f.internalName,
+                            oldValue: formatOldValue(oldItemData[f.internalName]),
+                            newValue: f.value
+                        })),
+                        fixedBy: 'System',
+                        fixedAt: new Date().toISOString(),
+                        status: 'Success'
+                    }
+                )
+            } catch (logErr: any) {
+                console.error('[remediate] Failed to write to SharePoint log:', logErr.message)
+                // Don't fail the remediation if logging fails
+            }
+        }
+
         return res.json({ success: true, itemId, fieldsPatched: fields.length })
 
     } catch (err: any) {
@@ -226,3 +259,131 @@ remediateRouter.post('/remediate', async (req: Request, res: Response) => {
         return res.status(500).json({ error: err.message ?? 'Internal server error' })
     }
 })
+
+// ─── Helper: Format Old Value ─────────────────────────────────────────────────
+
+function formatOldValue(value: any): string | null {
+    if (value === null || value === undefined || value === '') {
+        return null
+    }
+
+    // Handle objects (like lookup fields)
+    if (typeof value === 'object' && !Array.isArray(value)) {
+        if (value.Title) return value.Title
+        if (value.Label) return value.Label
+        return JSON.stringify(value)
+    }
+
+    // Handle arrays (multi-value fields)
+    if (Array.isArray(value)) {
+        return value.map(v => v.Title || v.Label || v).join('; ')
+    }
+
+    return String(value)
+}
+
+// ─── Helper: Write Log to SharePoint ─────────────────────────────────────────
+
+async function writeLogToSharePoint(
+    siteUrl: string,
+    listName: string,
+    token: string,
+    entry: {
+        itemId: number
+        fileName: string
+        libraryName: string
+        fields: Array<{ fieldName: string; oldValue: string | null; newValue: string }>
+        fixedBy: string
+        fixedAt: string
+        status: string
+    }
+) {
+    // First, get the actual field internal names from the list
+    const fieldsRes = await fetch(
+        `${siteUrl}/_api/web/lists/getbytitle('${listName}')/fields?$filter=Hidden eq false&$select=InternalName,Title`,
+        {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json;odata=nometadata',
+            }
+        }
+    )
+
+    if (!fieldsRes.ok) {
+        console.error('[remediate] Failed to fetch list fields')
+    }
+
+    const fieldsData: any = await fieldsRes.json()
+    const fields = fieldsData.value || []
+
+    // Create a mapping of our field names to actual internal names
+    const fieldMap: any = {}
+    for (const field of fields) {
+        const internalName = field.InternalName
+        if (internalName.includes('DocumentItemId') || field.Title === 'Document Item ID') {
+            fieldMap.DocumentItemId = internalName
+        } else if (internalName.includes('FileName') || field.Title === 'File Name') {
+            fieldMap.FileName = internalName
+        } else if (internalName.includes('LibraryName') || field.Title === 'Library Name') {
+            fieldMap.LibraryName = internalName
+        } else if (internalName.includes('FieldsFixed') || field.Title === 'Fields Fixed') {
+            fieldMap.FieldsFixed = internalName
+        } else if (internalName.includes('FixedBy') || field.Title === 'Fixed By') {
+            fieldMap.FixedBy = internalName
+        } else if (internalName.includes('FixedAt') || field.Title === 'Fixed At') {
+            fieldMap.FixedAt = internalName
+        } else if (internalName.includes('Status') && field.Title === 'Status') {
+            fieldMap.Status = internalName
+        }
+    }
+
+    // Build formatted list of fixed fields
+    const fieldsFixedText = entry.fields.map(f =>
+        `${f.fieldName}: ${f.oldValue || '(empty)'} → ${f.newValue}`
+    ).join('\n')
+
+    const fieldCount = entry.fields.length
+    const fieldNames = entry.fields.map(f => f.fieldName).join(', ')
+
+    // Format timestamp as readable date-time
+    const fixedDate = new Date(entry.fixedAt)
+    const timestamp = fixedDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).replace(',', '')
+
+    // Build the item body using the actual internal names
+    const itemBody: any = {
+        'Title': `${timestamp} | ${entry.fileName} | ${fieldCount} field${fieldCount > 1 ? 's' : ''} fixed`
+    }
+
+    if (fieldMap.DocumentItemId) itemBody[fieldMap.DocumentItemId] = entry.itemId
+    if (fieldMap.FileName) itemBody[fieldMap.FileName] = entry.fileName
+    if (fieldMap.LibraryName) itemBody[fieldMap.LibraryName] = entry.libraryName
+    if (fieldMap.FieldsFixed) itemBody[fieldMap.FieldsFixed] = fieldsFixedText
+    if (fieldMap.FixedBy) itemBody[fieldMap.FixedBy] = entry.fixedBy
+    if (fieldMap.FixedAt) itemBody[fieldMap.FixedAt] = entry.fixedAt
+    if (fieldMap.Status) itemBody[fieldMap.Status] = entry.status
+
+    const res = await fetch(
+        `${siteUrl}/_api/web/lists/getbytitle('${listName}')/items`,
+        {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json;odata=nometadata',
+                'Accept': 'application/json;odata=nometadata',
+            },
+            body: JSON.stringify(itemBody)
+        }
+    )
+
+    if (!res.ok) {
+        const error = await res.text()
+        throw new Error(`Failed to write log: ${error}`)
+    }
+}

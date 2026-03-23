@@ -2,6 +2,7 @@ const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:300
 
 export interface RemediateField {
     internalName: string
+    displayName: string
     value: string
     typeAsString: string
 }
@@ -10,7 +11,12 @@ export interface RemediateRequest {
     siteUrl: string
     libraryName: string
     itemId: number
+    fileName: string
     fields: RemediateField[]
+    loggingSettings?: {
+        loggingMode: 'local' | 'sharepoint'
+        spLogListName: string
+    }
 }
 
 export interface RemediateResponse {

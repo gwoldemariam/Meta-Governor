@@ -35,26 +35,73 @@ function NoManifest() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '14px',
-            padding: '80px 20px',
+            gap: '20px',
+            padding: '120px 20px',
             textAlign: 'center',
         }}>
-            <div style={{ fontSize: '36px', opacity: 0.4 }}>◈</div>
-            <div style={{
-                fontSize: '16px',
-                fontWeight: 700,
-                color: 'var(--text2)',
-            }}>
-                No manifest loaded
+            <div
+                style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, rgba(0,229,255,0.15) 0%, rgba(0,166,122,0.15) 100%)',
+                    border: '2px solid rgba(0,229,255,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '36px',
+                }}
+            >
+                🔍
             </div>
-            <div style={{
-                fontFamily: 'DM Mono, monospace',
-                fontSize: '11px',
-                color: 'var(--text3)',
-                maxWidth: '280px',
-                lineHeight: 1.6,
-            }}>
-                Use the Load Manifest button in the top bar to get started.
+            <div>
+                <div style={{
+                    fontSize: '20px',
+                    fontWeight: 700,
+                    color: 'var(--text)',
+                    fontFamily: 'Plus Jakarta Sans, sans-serif',
+                    marginBottom: '8px',
+                }}>
+                    Welcome to Meta-Governor
+                </div>
+                <div style={{
+                    fontFamily: 'DM Mono, monospace',
+                    fontSize: '12px',
+                    color: 'var(--text3)',
+                    maxWidth: '400px',
+                    lineHeight: 1.7,
+                }}>
+                    Get started by running your first SharePoint audit.
+                    <br />
+                    Click the <span style={{ color: 'var(--cyan-text)', fontWeight: 600 }}>Start Audit</span> button in the top bar
+                    <br />
+                    to discover all libraries, fields, and compliance gaps.
+                </div>
+            </div>
+            <div
+                style={{
+                    marginTop: '12px',
+                    padding: '16px 20px',
+                    background: 'rgba(0,220,200,0.05)',
+                    border: '1px solid rgba(0,220,200,0.15)',
+                    borderRadius: '12px',
+                    maxWidth: '500px',
+                }}
+            >
+                <div style={{
+                    fontFamily: 'DM Mono, monospace',
+                    fontSize: '11px',
+                    color: 'var(--text2)',
+                    lineHeight: 1.7,
+                    textAlign: 'left',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--cyan-text)' }}>
+                        💡 What happens next:
+                    </div>
+                    <div>1. Enter your SharePoint site URL</div>
+                    <div>2. Watch real-time progress as libraries are scanned</div>
+                    <div>3. Review compliance metrics and remediation queue</div>
+                </div>
             </div>
         </div>
     )
@@ -416,11 +463,6 @@ export default function HealthDashboard() {
         failTrend = summary.failCount > 0 ? 'action needed' : '✓ all clear'
     }
 
-    // Schema coverage — how much of the tenant is even being managed
-    const coverageRate = summary.totalLibraries > 0
-        ? Math.round((summary.governedLibraries / summary.totalLibraries) * 100)
-        : 0
-
     const accent = complianceAccent(governedRate)
 
     const accentColor =
@@ -451,13 +493,6 @@ export default function HealthDashboard() {
                     sub={`${governedPass} of ${governedTotal} governed items tagged`}
                     accent={complianceAccent(governedRate)} icon="✓"
                     trend={`${governedTotal} in scope`}
-                />
-                <MetricCard
-                    label="Schema Coverage"
-                    value={`${coverageRate}%`}
-                    sub={`${summary.governedLibraries} of ${summary.totalLibraries} libraries governed`}
-                    accent={complianceAccent(coverageRate)} icon="◈"
-                    trend={`${unmanaged} unmanaged`}
                 />
                 <MetricCard
                     label="Failing Items"
