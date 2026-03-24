@@ -2,11 +2,39 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import * as net from 'net'
+import fs from 'fs'
+import path from 'path'
 import { remediateRouter } from './routes/remediate'
 import { fieldsRouter } from './routes/fields'
 import { reauditRouter } from './routes/reaudit'
 import { auditRouter } from './routes/audit'
 import { loggingRouter } from './routes/logging'
+
+// ── Certificate Setup (for Render deployment) ─────────────────────────────────
+
+// Decode certificate from environment variable if present
+if (process.env.CERT_BASE64) {
+    const certDir = path.join(__dirname, '../../engine/certs')
+    const certPath = path.join(certDir, 'private.key')
+
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(certDir)) {
+        fs.mkdirSync(certDir, { recursive: true })
+        console.log('[meta-gov api] Created certs directory')
+    }
+
+    // Write decoded certificate
+    try {
+        const certContent = Buffer.from(process.env.CERT_BASE64, 'base64').toString('utf-8')
+        fs.writeFileSync(certPath, certContent, { mode: 0o600 }) // Secure permissions
+        console.log('[meta-gov api] ✓ Certificate loaded from environment variable')
+    } catch (err: any) {
+        console.error('[meta-gov api] ✗ Failed to decode certificate:', err.message)
+        console.error('[meta-gov api]   Make sure CERT_BASE64 is properly base64 encoded')
+    }
+}
+
+// ── Express App Setup ──────────────────────────────────────────────────────────
 
 const app = express()
 
