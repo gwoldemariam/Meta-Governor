@@ -1,38 +1,74 @@
 import 'dotenv/config'
+import fs from 'fs'
+import path from 'path'
+
+// ── Certificate Setup (MUST BE FIRST - before any route imports) ──────────────
+
+// Decode certificate from environment variable if present
+if (process.env.CERT_BASE64) {
+    console.log('[meta-gov api] Setting up certificate from CERT_BASE64...')
+
+    // Determine path based on build vs source
+    const isDist = __dirname.includes('/dist')
+
+    // Navigate to engine/certs from current location
+    let certDir: string
+    if (isDist) {
+        // Production: packages/api/dist/index.js -> ../../../engine/certs
+        certDir = path.join(__dirname, '../../../engine/certs')
+    } else {
+        // Development: packages/api/src/index.ts -> ../../engine/certs
+        certDir = path.join(__dirname, '../../engine/certs')
+    }
+
+    const certPath = path.join(certDir, 'private.key')
+
+    console.log('[meta-gov api] __dirname:', __dirname)
+    console.log('[meta-gov api] isDist:', isDist)
+    console.log('[meta-gov api] certDir:', certDir)
+    console.log('[meta-gov api] certPath:', certPath)
+
+    try {
+        // Create directory
+        if (!fs.existsSync(certDir)) {
+            fs.mkdirSync(certDir, { recursive: true })
+            console.log('[meta-gov api] ✓ Created directory:', certDir)
+        }
+
+        // Decode and write certificate
+        const certContent = Buffer.from(process.env.CERT_BASE64, 'base64').toString('utf-8')
+        fs.writeFileSync(certPath, certContent, { mode: 0o600 })
+        console.log('[meta-gov api] ✓ Certificate written')
+
+        // Set CERT_PATH to absolute path
+        process.env.CERT_PATH = certPath
+        console.log('[meta-gov api] ✓ CERT_PATH set to:', certPath)
+
+        // Verify file exists
+        if (fs.existsSync(certPath)) {
+            const stats = fs.statSync(certPath)
+            console.log('[meta-gov api] ✓ Certificate verified, size:', stats.size, 'bytes')
+        }
+
+    } catch (err: any) {
+        console.error('[meta-gov api] ✗ Certificate setup failed:', err.message)
+        console.error('[meta-gov api]   Stack:', err.stack)
+        process.exit(1) // Exit if certificate setup fails
+    }
+} else {
+    console.log('[meta-gov api] No CERT_BASE64 found, expecting certificate at CERT_PATH')
+}
+
+// ── NOW Import Routes (after certificate is ready) ────────────────────────────
+
 import express from 'express'
 import cors from 'cors'
 import * as net from 'net'
-import fs from 'fs'
-import path from 'path'
 import { remediateRouter } from './routes/remediate'
 import { fieldsRouter } from './routes/fields'
 import { reauditRouter } from './routes/reaudit'
 import { auditRouter } from './routes/audit'
 import { loggingRouter } from './routes/logging'
-
-// ── Certificate Setup (for Render deployment) ─────────────────────────────────
-
-// Decode certificate from environment variable if present
-if (process.env.CERT_BASE64) {
-    const certDir = path.join(__dirname, '../../engine/certs')
-    const certPath = path.join(certDir, 'private.key')
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(certDir)) {
-        fs.mkdirSync(certDir, { recursive: true })
-        console.log('[meta-gov api] Created certs directory')
-    }
-
-    // Write decoded certificate
-    try {
-        const certContent = Buffer.from(process.env.CERT_BASE64, 'base64').toString('utf-8')
-        fs.writeFileSync(certPath, certContent, { mode: 0o600 }) // Secure permissions
-        console.log('[meta-gov api] ✓ Certificate loaded from environment variable')
-    } catch (err: any) {
-        console.error('[meta-gov api] ✗ Failed to decode certificate:', err.message)
-        console.error('[meta-gov api]   Make sure CERT_BASE64 is properly base64 encoded')
-    }
-}
 
 // ── Express App Setup ──────────────────────────────────────────────────────────
 
@@ -44,7 +80,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
 }))
 
-app.use(express.json({ limit: '10mb' }))   // manifests can be large
+app.use(express.json({ limit: '10mb' }))
 
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'meta-governor-api', ts: new Date().toISOString() })
