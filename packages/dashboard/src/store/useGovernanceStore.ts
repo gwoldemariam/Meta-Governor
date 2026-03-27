@@ -56,8 +56,8 @@ interface GovernanceState {
     libraryProgress: LibraryProgress[]
     reauditSummary: ReauditSummary | null
     showReauditToast: boolean
-    previousComplianceRate: number | null  // For trend tracking
-    previousFailCount: number | null       // For failing items trend
+    previousComplianceRate: number | null
+    previousFailCount: number | null
 
     // UI state
     theme: 'light' | 'dark'
@@ -70,7 +70,7 @@ interface GovernanceState {
     settings: GovernanceSettings
 
     // Actions
-    loadManifest: (file: File) => void
+    loadManifest: (file: File, onSuccess?: () => void) => void
     setManifest: (manifest: TenantManifest) => void
     clearManifest: () => void
     toggleTheme: () => void
@@ -141,7 +141,7 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
 
     // ── Actions ────────────────────────────────────────────────────────────────
 
-    loadManifest: (file: File) => {
+    loadManifest: (file: File, onSuccess?: () => void) => {
         set({ loadStatus: 'loading', loadError: null })
 
         const reader = new FileReader()
@@ -162,8 +162,15 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
 
                 set({ loadStatus: 'loaded', manifest: data, loadError: null })
 
+                // Call success callback (for navigation)
+                if (onSuccess) {
+                    onSuccess()
+                }
+
                 // Auto-trigger re-audit silently after manifest loads
-                setTimeout(() => { get().triggerReaudit() }, 300)
+                if (!data.siteUrl.includes('contoso')) {
+                    setTimeout(() => { get().triggerReaudit() }, 300)
+                }
 
             } catch {
                 set({
@@ -208,7 +215,6 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
             libraryProgress: [],
             reauditSummary: null,
             showReauditToast: false,
-            // Reset logging settings to default (Local mode)
             settings: {
                 loggingMode: 'local',
                 spLogListName: 'GovernanceRemediationLog',
@@ -259,7 +265,6 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 const newPassCount = updatedItems.filter(i => i.status === 'Pass').length
                 const newFailCount = updatedItems.filter(i => i.status === 'Fail').length
 
-                // Update schemaStatus based on new failCount
                 let newSchemaStatus = lib.schemaStatus
                 if (lib.schemaStatus !== 'no-schema' && lib.schemaStatus !== 'empty') {
                     newSchemaStatus = newFailCount > 0 ? 'violations' : 'governed'
@@ -299,12 +304,11 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
     triggerReaudit: async () => {
         const { manifest, reauditStatus } = get()
         if (!manifest) return
-        if (reauditStatus === 'running') return     // already in flight
+        if (reauditStatus === 'running') return
 
-        const MIN_DISPLAY_TIME = 800 // ms
+        const MIN_DISPLAY_TIME = 800
         const startTime = Date.now()
 
-        // Initialize progress for all governed libraries
         const governedLibraries = manifest.libraries.filter(lib =>
             lib.schemaStatus === 'governed' || lib.schemaStatus === 'violations'
         )
@@ -321,11 +325,9 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
             showReauditToast: false,
         })
 
-        // Simulate per-library scanning with staggered updates
         const simulateProgress = async () => {
             for (let i = 0; i < governedLibraries.length; i++) {
                 await new Promise(resolve => setTimeout(resolve, 150))
-
                 set(state => ({
                     libraryProgress: state.libraryProgress.map((lib, idx) =>
                         idx === i ? { ...lib, status: 'scanning' as const } : lib
@@ -334,7 +336,6 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
             }
         }
 
-        // Start progress simulation
         simulateProgress()
 
         try {
@@ -351,24 +352,17 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
 
             const result = await res.json()
 
-            // Build progress for ALL libraries in the result (includes new ones)
             let totalNewItems = 0
             let totalNewLibraries = 0
-
             const oldLibraryUrls = new Set(governedLibraries.map(lib => lib.serverRelativeUrl))
 
             const updatedProgress: LibraryProgress[] = result.libraries
                 .filter((lib: any) => lib.schemaStatus === 'governed' || lib.schemaStatus === 'violations')
                 .map((freshLib: any) => {
                     const oldLib = governedLibraries.find(lib => lib.serverRelativeUrl === freshLib.serverRelativeUrl)
-
-                    // Check if this is a brand new library
                     const isNewLibrary = !oldLibraryUrls.has(freshLib.serverRelativeUrl)
-                    if (isNewLibrary) {
-                        totalNewLibraries++
-                    }
+                    if (isNewLibrary) totalNewLibraries++
 
-                    // Calculate new items (only for existing libraries)
                     const oldItemCount = oldLib?.itemCount ?? 0
                     const newItemCount = freshLib.itemCount
                     const newItems = Math.max(0, newItemCount - oldItemCount)
@@ -381,27 +375,22 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                     }
                 })
 
-            // Enforce minimum display time
             const elapsed = Date.now() - startTime
             if (elapsed < MIN_DISPLAY_TIME) {
                 await new Promise(resolve => setTimeout(resolve, MIN_DISPLAY_TIME - elapsed))
             }
 
-            // Merge fresh library data back into manifest
             set(state => {
                 if (!state.manifest) return {}
 
-                // Save current metrics before updating (for trend tracking)
                 const previousRate = state.manifest.summary?.complianceRate ?? null
                 const previousFails = state.manifest.summary?.failCount ?? null
 
-                // Use the complete library list from re-audit result
-                // Re-audit now returns ALL libraries (old + new), so we don't need to merge
                 return {
                     manifest: {
                         ...state.manifest,
-                        libraries: result.libraries,  // Replace entirely with fresh data
-                        summary: result.summary,      // Replace entirely with fresh summary
+                        libraries: result.libraries,
+                        summary: result.summary,
                     },
                     reauditStatus: 'done' as ReauditStatus,
                     reauditError: null,
@@ -409,7 +398,7 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                     libraryProgress: updatedProgress,
                     reauditSummary: {
                         totalNewItems,
-                        librariesScanned: updatedProgress.length,  // Actual number scanned
+                        librariesScanned: updatedProgress.length,
                         totalNewLibraries,
                     },
                     showReauditToast: true,
@@ -418,10 +407,7 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 }
             })
 
-            // Auto-dismiss toast after 4 seconds
-            setTimeout(() => {
-                set({ showReauditToast: false })
-            }, 4000)
+            setTimeout(() => { set({ showReauditToast: false }) }, 4000)
 
         } catch (err: any) {
             console.warn('[reaudit] failed:', err.message)
@@ -437,14 +423,11 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
         set({ showReauditToast: false })
     },
 
-    // ── Selectors ──────────────────────────────────────────────────────────────
-
     getWorkQueue: () => {
         const { manifest } = get()
         if (!manifest) return []
 
         const queue: WorkQueueItem[] = []
-
         for (const lib of manifest.libraries) {
             for (const item of lib.items) {
                 if (item.status === 'Fail') {
@@ -461,7 +444,6 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
                 }
             }
         }
-
         return queue
     },
 

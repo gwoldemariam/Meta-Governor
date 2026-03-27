@@ -1,14 +1,18 @@
 import { useCallback, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useGovernanceStore } from '../store/useGovernanceStore'
 
 export default function ManifestLoader() {
+    const navigate = useNavigate()
     const { loadManifest, loadStatus, loadError, clearManifest } = useGovernanceStore()
     const inputRef = useRef<HTMLInputElement>(null)
     const [dragging, setDragging] = useState(false)
 
     const handleFile = useCallback((file: File) => {
-        loadManifest(file)
-    }, [loadManifest])
+        loadManifest(file, () => {
+            navigate('/')  // Navigate to dashboard after successful load
+        })
+    }, [loadManifest, navigate])
 
     const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault()
@@ -108,8 +112,8 @@ export default function ManifestLoader() {
                     maxWidth: '520px',
                     minHeight: '220px',
                     border: `2px dashed ${dragging ? 'var(--cyan-text)' :
-                            isError ? 'var(--pink)' :
-                                'var(--border2)'
+                        isError ? 'var(--pink)' :
+                            'var(--border2)'
                         }`,
                     borderRadius: '18px',
                     background: dragging
