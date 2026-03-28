@@ -49,6 +49,46 @@ Meta-Governor provides:
 
 ---
 
+## 📸 Screenshots
+
+### Enterprise-Scale Health Dashboard
+Monitor compliance across 187 documents in 6 SharePoint libraries at a glance. Track violations, view compliance rates, and identify governance gaps instantly.
+
+![Health Dashboard](docs/images/01-health-dashboard.png)
+
+### Library Explorer - Drill Down into Violations
+Navigate into specific libraries to see exactly which documents are missing metadata. The intuitive grid shows file names, violation status, and missing fields for targeted remediation.
+
+![Library Explorer](docs/images/02-library-explorer.png)
+
+### Smart Fix Panel - Before & After
+Fix metadata violations with an intelligent interface that validates your inputs in real-time. Fill required fields using dropdowns, text inputs, and taxonomy selectors.
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/03-fix-panel-before.png" alt="Fix Panel - Before">
+      <p align="center"><em>Before: Empty required fields highlighted</em></p>
+    </td>
+    <td width="50%">
+      <img src="docs/images/04-fix-panel-after.png" alt="Fix Panel - After">
+      <p align="center"><em>After: Fields filled and validated, ready to save</em></p>
+    </td>
+  </tr>
+</table>
+
+### Centralized Remediation Queue
+Manage all 47 violations from a unified queue. Filter by library, search by filename, and prioritize fixes across your entire SharePoint governance landscape.
+
+![Remediation Queue](docs/images/05-remediation-queue.png)
+
+### Enterprise Logging & Audit Trail
+Track every change with dual logging modes. Use browser storage for quick access or SharePoint lists for enterprise-grade audit trails with before/after values.
+
+![Settings - Logging Configuration](docs/images/06-settings-logging.png)
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
